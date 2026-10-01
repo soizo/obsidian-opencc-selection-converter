@@ -1,0 +1,120 @@
+{
+  "results": [
+    {
+      "name": "official-ocd2-offline",
+      "pass": true,
+      "result": "伺服器軟體"
+    },
+    {
+      "name": "official-inspection-pipeline",
+      "pass": true,
+      "result": {
+        "output": "伺服器軟體",
+        "pipelineStages": 2,
+        "segments": [
+          "服务器",
+          "软件"
+        ]
+      }
+    },
+    {
+      "name": "custom-relative-text-chain",
+      "pass": true,
+      "result": "【軟體】\n丙"
+    },
+    {
+      "name": "custom-inspection-length-change",
+      "pass": true,
+      "result": {
+        "input": "软件甲乙",
+        "segments": [
+          "软件",
+          "甲乙"
+        ],
+        "stages": [
+          {
+            "index": 1,
+            "segments": [
+              "軟件",
+              "丙"
+            ]
+          },
+          {
+            "index": 2,
+            "segments": [
+              "軟體",
+              "丙"
+            ]
+          }
+        ],
+        "output": "軟體丙"
+      }
+    },
+    {
+      "name": "inline-normalization",
+      "pass": true,
+      "result": "乙"
+    },
+    {
+      "name": "group-priority",
+      "pass": true,
+      "result": "乙"
+    },
+    {
+      "name": "missing-dictionary-rejected",
+      "pass": true,
+      "result": "missing.txt (searched: /probe/, ., /probe/) not found or not accessible."
+    },
+    {
+      "name": "unknown-dictionary-rejected",
+      "pass": true,
+      "result": "Invalid format: Unknown dictionary type: invented"
+    },
+    {
+      "name": "mixed-newlines-preserved",
+      "pass": true,
+      "result": "軟體\r\n軟體\n軟體\r"
+    },
+    {
+      "name": "long-input-50000-codepoints",
+      "pass": true,
+      "result": {
+        "characters": 50000,
+        "milliseconds": 9
+      }
+    },
+    {
+      "name": "equal-total-can-hide-internal-shift",
+      "pass": true,
+      "result": {
+        "input": "甲丙丁",
+        "segments": [
+          "甲丙丁"
+        ],
+        "stages": [
+          {
+            "index": 1,
+            "segments": [
+              "甲乙丙"
+            ]
+          }
+        ],
+        "output": "甲乙丙"
+      }
+    },
+    {
+      "name": "unknown-option-observation",
+      "pass": true,
+      "result": {
+        "accepted": true,
+        "requiresHostValidation": true
+      }
+    }
+  ],
+  "pass": true,
+  "network": "fetch-and-xhr-disabled",
+  "runtime": {
+    "node": "undefined",
+    "worker": "function"
+  }
+}

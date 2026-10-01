@@ -38,4 +38,6 @@
 ## 工作约定
 
 - 用户要求先问清需求，避免误解，再进入实现。
+- 全部功能测试通过 Obsidian CLI 驱动，使用新建的专用 vault，不修改现有笔记库。桌面端移动模拟不等于 Android/iOS 真机验证。
+- 已创建测试 vault：`~/Desktop/PlayGround/OpenCC-Selection-Converter-Test`。所有测试命令显式指定 `vault=OpenCC-Selection-Converter-Test`。
 - 已授权初始化 Git 并按阶段自动创建本地提交；不推送，不启动子代理。

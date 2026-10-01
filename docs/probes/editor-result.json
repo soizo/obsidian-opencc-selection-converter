@@ -1,0 +1,16 @@
+[
+  {
+    "mode": "live-preview",
+    "multiChange": true,
+    "outsideSelectionUnchanged": true,
+    "undo": true,
+    "redo": true
+  },
+  {
+    "mode": "source",
+    "multiChange": true,
+    "outsideSelectionUnchanged": true,
+    "undo": true,
+    "redo": true
+  }
+]
