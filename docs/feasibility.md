@@ -118,7 +118,7 @@ OpenCC 官方 README 列出 `opencc-wasm`，其维护仓库为 `frankslin/OpenCC
 
 插件层保持四个明确职责：Obsidian 入口与原子提交、可见文本/区域/源码映射、配置资源与快照缓存、Worker 内的 OpenCC 引擎。设置使用 Obsidian 原生组件，不引入额外前端框架。
 
-用户已认可该方向；详细边界见[待审核的书面设计](superpowers/specs/2026-10-02-opencc-selection-converter-design.md)。此确认不改变上述验证覆盖范围。
+用户已认可该方向；详细边界见[已批准的书面设计](superpowers/specs/2026-10-02-opencc-selection-converter-design.md)。此确认不改变上述验证覆盖范围。
 
 ## 7. 未验证事项
 
