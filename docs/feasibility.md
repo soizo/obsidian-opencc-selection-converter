@@ -110,13 +110,15 @@ OpenCC 官方 README 列出 `opencc-wasm`，其维护仓库为 `frankslin/OpenCC
 
 可复用探针、结果快照及运行步骤保存在 [probes/README.md](probes/README.md)。
 
-## 6. 建议的架构方向（待确认）
+## 6. 已认可的架构方向
 
 优先采用固定版本的 OpenCC C++ 核心编译为浏览器/Worker WASM，增加最小的匹配偏移和词典枚举绑定；不在 JavaScript 重写 OpenCC 匹配语义。现有 `opencc-wasm` 是可行性参考，其发布接口还不足以独立满足精确源码映射和完整词典检查。自有绑定及构建尚未实现或验证。
 
 另外两条路线的取舍：直接用已有 WASM 包可减少构建工作，但缺少必要的追踪/枚举接口；纯 JS 或桌面原生绑定分别不能覆盖真实配置语义或移动端目标。
 
 插件层保持四个明确职责：Obsidian 入口与原子提交、可见文本/区域/源码映射、配置资源与快照缓存、Worker 内的 OpenCC 引擎。设置使用 Obsidian 原生组件，不引入额外前端框架。
+
+用户已认可该方向；详细边界见[待审核的书面设计](superpowers/specs/2026-10-02-opencc-selection-converter-design.md)。此确认不改变上述验证覆盖范围。
 
 ## 7. 未验证事项
 
