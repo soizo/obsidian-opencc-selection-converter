@@ -28,6 +28,14 @@ export function projectMarkdown(state: EditorState, selection: Span, rules: Rule
     if (token.tags.some(tag => tag.startsWith('HyperMD-'))) blocks.push(token);
     else tokens.push(token);
   } });
+  const styles: Projection['styles'] = [];
+  const openStyles = new Map<string, Span>();
+  for (const token of tokens) for (const kind of ['strong', 'em', 'strikethrough', 'highlight']) {
+    if (!token.tags.includes(`formatting-${kind}`) || token.tags.includes('hmd-codeblock')) continue;
+    const open = openStyles.get(kind);
+    if (open) { styles.push({ kind, open, close: { from: token.from, to: token.to } }); openStyles.delete(kind); }
+    else openStyles.set(kind, { from: token.from, to: token.to });
+  }
   const regions: Region[] = [];
   function region(kind: RegionKind, from: number, to: number, parent?: Region): Region {
     const result: Region = { id: `${kind}:${from}:${regions.length}`, kind, source: { from, to }, parentId: parent?.id ?? null, parent };
@@ -194,5 +202,5 @@ export function projectMarkdown(state: EditorState, selection: Span, rules: Rule
     offset = source.to;
   }
   flush();
-  return { selection, runs, regions, fingerprint: JSON.stringify(tokens.map(token => [token.name, token.from, token.to])) };
+  return { source: text, styles, rules: structuredClone(rules), selection, runs, regions, fingerprint: JSON.stringify(tokens.map(token => [token.name, token.from, token.to])) };
 }

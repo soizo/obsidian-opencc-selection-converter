@@ -11,7 +11,15 @@ export type VisibleUnit = {
   wiki?: { source: Span; target: string };
   math?: { command?: string; textMode: boolean };
 };
+export type SourceChange = Span & { insert: string };
+export type ExpectedScalar = { text: string; context: VisibleUnit['context']; formats: string[] };
+export type PatchPlan = { changes: SourceChange[]; outputs: string[]; expected: ExpectedScalar[][] };
+export type StyleWrapper = { kind: string; open: Span; close: Span };
+
 export type Projection = {
+  source: string;
+  styles: StyleWrapper[];
+  rules: RuleSettings;
   selection: Span;
   runs: { units: VisibleUnit[] }[];
   regions: Region[];

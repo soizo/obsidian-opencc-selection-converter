@@ -224,17 +224,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `convertProjection(projection: Projection, snapshot: Snapshot, rules: RuleSettings, engine: EngineClient, signal: AbortSignal): Promise<PatchPlan>`；`serialize(projection, convertedRuns): PatchPlan`；`validatePatch(state: EditorState, projection: Projection, patch: PatchPlan): void`。同一 run 只做一次完整配置转换，行内格式不切断词组。
 
-- [ ] **写失败用例。** `mapping/phrase`、`mapping/strict-per-match`、`mapping/force`、`mapping/syntax`：
+- [x] **写失败用例。** `mapping/phrase`、`mapping/strict-per-match`、`mapping/force`、`mapping/syntax`：
   ```ts
   equal(await convertedSource('软**件**', equalLengthScheme), '軟**體**');
   await rejectsCode(convertedSource('甲**丙丁**', cancellingLengthsScheme), 'LENGTH_CHANGED');
   equal(await convertedSource('甲**乙**', shrinkingScheme, {force:true}), '丙');
   equal(await convertedSource('\\[说明\\]', bracketScheme), '【說明】');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- mapping`；使用任务 2/3 的真实 Worker，不用自写替换表模拟关键转换。
-- [ ] **实现聚合与序列化。** 在提交前完成所有 runs，按 origins 将输出分配回原 units；严格模式拒绝任一不等长 match，强制模式按起始格式；普通文字、实体/转义、代码、数学分别编码。清除空样式仅限完整选中纯样式包装；无别名 wikilink 仅完整引用可加 alias；不能删目标或改外围栏。使用捕获 state 的纯候选 transaction 生成新状态并重解析上下文，比较结构、受保护跨度、换行和 selection 外源码；不调用 editor.setValue。
-- [ ] **验证。** `npm run test:cli -- mapping`；包含 emoji/补充平面汉字和组合序列；新文字生成 Markdown/数学关键字符；只选中转义的一部分且会变化则拒绝；跨链接/加粗、部分样式包装、生成代码闭合符拒绝；换行不变；任一 run 失败所有 edits 作废；无变化返回空 changes。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: serialize traced conversion without damaging source structure"`。
+- [x] **运行红灯。** `npm run test:cli -- mapping`；使用任务 2/3 的真实 Worker，不用自写替换表模拟关键转换。
+- [x] **实现聚合与序列化。** 在提交前完成所有 runs，按 origins 将输出分配回原 units；严格模式拒绝任一不等长 match，强制模式按起始格式；普通文字、实体/转义、代码、数学分别编码。清除空样式仅限完整选中纯样式包装；无别名 wikilink 仅完整引用可加 alias；不能删目标或改外围栏。使用捕获 state 的纯候选 transaction 生成新状态并重解析上下文，比较结构、受保护跨度、换行和 selection 外源码；不调用 editor.setValue。
+- [x] **验证。** `npm run test:cli -- mapping`；包含 emoji/补充平面汉字和组合序列；新文字生成 Markdown/数学关键字符；只选中转义的一部分且会变化则拒绝；跨链接/加粗、部分样式包装、生成代码闭合符拒绝；换行不变；任一 run 失败所有 edits 作废；无变化返回空 changes。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: serialize traced conversion without damaging source structure"`。
 
 ### Task 9: 真实编辑器原子提交、撤销隔离与竞争保护
 
