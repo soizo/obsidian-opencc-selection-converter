@@ -6,6 +6,7 @@ import { SchemeEditModal, safeError, safeLocation } from '../../src/scheme-modal
 import { PluginError } from '../../src/errors';
 import { DEFAULT_RULES } from '../../src/selection/types';
 import { schemeSourceKey } from '../../src/schemes/resources';
+import { parseConfig, resolveDependencies } from '../../src/schemes/config';
 import { snapshot } from './engine.test';
 import type { SchemeStore } from '../../src/schemes/store';
 import { equal, ok } from './assert';
@@ -111,10 +112,12 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         const presets = modalDocument().querySelector<HTMLSelectElement>('[data-opencc-presets]'); ok(presets);
         equal(Array.from(presets.options).map(item => item.value).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t');
         button(document, t('official.add'));
-        const location = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/config/s2t.json';
+        const location = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config/s2t.json';
         await wait(() => [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].some(item => item.source.location === location), 'Create official preset');
         const draft = [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].find(item => item.source.location === location); ok(draft);
         equal(draft.name, t('official.s2t')); equal(draft.source.kind, 'url');
+        const plan = resolveDependencies(parseConfig('{"conversion_chain":[{"dict":{"type":"ocd2","file":"STCharacters.ocd2"}}]}'), draft);
+        equal(plan.resources[0]?.source.location, 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/prebuilds/assets/STCharacters.ocd2');
       });
     } },
     { name: 'settings/custom-save-and-first-default', run: async () => {

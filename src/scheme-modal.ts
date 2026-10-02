@@ -7,7 +7,8 @@ import { prepareScheme, loadPrepared, schemeSourceKey } from './schemes/resource
 import type { SchemeStore } from './schemes/store';
 import { errorText, t } from './i18n';
 
-const OFFICIAL_CONFIG_BASE = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/config';
+const OFFICIAL_CONFIG_BASE = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config';
+const OFFICIAL_DICTIONARY_BASE = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/prebuilds/assets/';
 const OFFICIAL_PRESETS = [
   ['s2t', 'official.s2t'], ['t2s', 'official.t2s'], ['s2tw', 'official.s2tw'], ['tw2s', 'official.tw2s'],
   ['s2hk', 'official.s2hk'], ['hk2s', 'official.hk2s'], ['s2twp', 'official.s2twp'], ['tw2sp', 'official.tw2sp'],
@@ -183,7 +184,7 @@ export class SchemeEditModal extends Modal {
     if (this.busy || this.controller.signal.aborted || this.primary.buttonEl.disabled) return;
     if (this.reviewPlan) { await this.load(this.reviewPlan); return; }
     if (this.sourceChoice === 'preset') {
-      this.officialDraft ??= { id: crypto.randomUUID(), name: t(this.preset[1]), source: { kind: 'url', location: this.officialLocation(this.preset[0]) } };
+      this.officialDraft ??= { id: crypto.randomUUID(), name: t(this.preset[1]), source: { kind: 'url', location: this.officialLocation(this.preset[0]) }, dependencyBase: OFFICIAL_DICTIONARY_BASE };
       await this.prepare(false, this.officialDraft);
     } else await this.prepare();
   }
