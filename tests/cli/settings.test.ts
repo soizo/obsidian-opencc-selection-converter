@@ -10,6 +10,7 @@ import { snapshot } from './engine.test';
 import type { SchemeStore } from '../../src/schemes/store';
 import { equal, ok } from './assert';
 import { openFixture, type TestPlugin } from './fixtures';
+import { errorText, localeFor, t } from '../../src/i18n';
 
 type Endpoint = TestPlugin & {
   store: SchemeStore;
@@ -54,11 +55,11 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
     }
   }
   async function addPath(root: HTMLElement, name: string, path: string) {
-    button(root, '添加方案');
-    field('方案名称', name); field('配置来源', 'vault'); field('配置位置', path);
-    button(document, '预览依赖');
-    await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === '确认并加载'));
-    button(document, '确认并加载');
+    button(root, t('settings.addScheme'));
+    field(t('field.schemeName'), name); field(t('field.source'), 'vault'); field(t('field.location'), path);
+    button(document, t('action.preview'));
+    await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === t('action.load')));
+    button(document, t('action.load'));
     await wait(() => endpoint.store.getDefinitions().some(item => item.name === name), 'Activate new UI scheme');
     const definition = endpoint.store.getDefinitions().find(item => item.name === name)!;
     await wait(() => root.textContent?.includes(name) ?? false, 'Refresh scheme row');
@@ -70,15 +71,21 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
     return { definition: await addPath(root, name, file.path), file };
   }
   return [
+    { name: 'settings/locales', run: () => {
+      equal(localeFor('en-gb'), 'en-GB');
+      equal(localeFor('zh-cn'), 'zh-Hans');
+      equal(localeFor('zh-tw'), 'zh-Hans');
+      equal(localeFor('fr'), 'en-GB');
+    } },
     { name: 'settings/crud-default', run: async () => {
       await mounted(async root => {
         const name = `UI ${crypto.randomUUID()}`;
         const { definition } = await add(root, name, { 软件: '軟體' });
-        field('默认方案', definition.id);
+        field(t('settings.default'), definition.id);
         await wait(() => endpoint.store.getDefaultId() === definition.id);
         const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`);
-        ok(row); button(row, '删除');
-        button(document, '确认删除');
+        ok(row); button(row, t('action.delete'));
+        button(document, t('delete.confirm'));
         await wait(() => !endpoint.store.getDefinitions().some(item => item.id === definition.id));
         equal(endpoint.store.getDefaultId(), null);
       });
@@ -89,8 +96,8 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         const { definition } = await add(root, originalName, { 软件: '軟體' });
         const before = endpoint.schemeCommands.get(definition.id);
         ok(before); ok(before.id.endsWith(`:convert:${definition.id}`));
-        const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, '编辑');
-        field('方案名称', `${originalName} 新名`); button(document, '仅保存名称');
+        const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('action.edit'));
+        field(t('field.schemeName'), `${originalName} 新名`); button(document, t('action.rename'));
         await wait(() => endpoint.store.getDefinitions().some(item => item.id === definition.id && item.name.endsWith('新名')), 'Rename scheme');
         const after = endpoint.schemeCommands.get(definition.id); ok(after);
         equal(after.id, before.id); ok(after.name.includes('新名'));
@@ -118,9 +125,9 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       try {
         plugin.app.workspace.trigger('editor-menu', menu, view.editor, view);
         menu.showAtPosition({ x: 10, y: 10 });
-        await wait(() => document.body.textContent?.includes('OpenCC：使用默认方案转换选区') ?? false, 'Context menu item');
-        const item = Array.from(document.querySelectorAll<HTMLElement>('.menu-item')).find(element => element.textContent?.includes('OpenCC：使用默认方案转换选区'));
-        ok(item); item.click();
+        await wait(() => document.body.textContent?.includes(definition.name) ?? false, 'Context menu item');
+        const items = Array.from(document.querySelectorAll<HTMLElement>('.menu-item')).filter(element => element.textContent?.includes(definition.name));
+        equal(items.length, 1); items[0]!.click();
         await wait(() => view.editor.getValue() === '軟體', 'Context menu conversion');
       } finally {
         menu.close();
@@ -131,22 +138,22 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
     } },
     { name: 'settings/redaction', run: () => {
       const secret = 'https://user:pass@example.com/config.json?token=secret';
-      equal(safeLocation(secret), 'https://example.com/config.json（查询参数已隐藏）');
-      equal(safeError(new PluginError('FETCH_FAILED', `无法读取 ${secret}`)), 'FETCH_FAILED：无法读取 https://example.com/config.json（查询参数已隐藏）');
+      equal(safeLocation(secret), t('location.queryHidden', { location: 'https://example.com/config.json' }));
+      equal(safeError(new PluginError('FETCH_FAILED', `无法读取 ${secret}`)), t('error.format', { code: 'FETCH_FAILED', message: errorText('FETCH_FAILED', '') }));
     } },
     { name: 'settings/resource-consent', run: async () => {
       ok(fixtureOrigin, 'Missing loopback fixture');
       const before = (await requestUrl(`${fixtureOrigin}/requests`)).json.length;
       await mounted(async root => {
-        button(root, '添加方案');
-        field('方案名称', `HTTP ${crypto.randomUUID()}`); field('配置来源', 'url'); field('配置位置', `${fixtureOrigin}/config.json`);
-        button(document, '预览依赖');
-        await wait(() => document.body.textContent?.includes('允许 HTTP 请求') ?? false);
+        button(root, t('settings.addScheme'));
+        field(t('field.schemeName'), `HTTP ${crypto.randomUUID()}`); field(t('field.source'), 'url'); field(t('field.location'), `${fixtureOrigin}/config.json`);
+        button(document, t('action.preview'));
+        await wait(() => document.body.textContent?.includes(t('http.allow')) ?? false);
         equal((await requestUrl(`${fixtureOrigin}/requests`)).json.length, before);
-        button(document, '允许 HTTP 请求');
-        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === '确认并加载'));
+        button(document, t('http.allow'));
+        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === t('action.load')));
         equal((await requestUrl(`${fixtureOrigin}/requests`)).json.length, before + 1);
-        button(document, '关闭'); // Real cancel control: no dictionary request.
+        button(document, t('action.close')); // Real cancel control: no dictionary request.
       });
       equal((await requestUrl(`${fixtureOrigin}/requests`)).json.length, before + 1);
     } },
@@ -154,13 +161,13 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const name = `Cancel ${crypto.randomUUID()}`;
         const file = await plugin.app.vault.create(`__opencc_tests__/settings-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
-        button(root, '添加方案'); field('方案名称', name); field('配置来源', 'vault'); field('配置位置', file.path); button(document, '预览依赖');
-        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === '确认并加载' && !item.disabled), 'Cancellation preview');
+        button(root, t('settings.addScheme')); field(t('field.schemeName'), name); field(t('field.source'), 'vault'); field(t('field.location'), file.path); button(document, t('action.preview'));
+        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === t('action.load') && !item.disabled), 'Cancellation preview');
         const original = endpoint.engine.validate;
         let resume!: () => void; const gate = new Promise<void>(resolve => { resume = resolve; });
         endpoint.engine.validate = async (snapshot, signal) => { await gate; return original.call(endpoint.engine, snapshot, signal); };
         try {
-          button(document, '确认并加载');
+          button(document, t('action.load'));
           const draft = endpoint.store.getDrafts().find(item => item.name === name); ok(draft);
           await wait(() => endpoint.store.getStatus(draft.id).kind === 'loading', 'Loading status');
           [...endpoint.uiModals].at(-1)?.close(); resume();
@@ -173,32 +180,32 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const { definition, file } = await add(root, `Refresh ${crypto.randomUUID()}`, { 软件: '軟體字' });
         const firstSnapshot = endpoint.store.getStatus(definition.id).snapshotId; ok(firstSnapshot);
-        let row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, '等长检查');
-        await wait(() => row?.textContent?.includes('存在长度风险') ?? false, 'Initial audit');
+        let row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('length.check'));
+        await wait(() => row?.textContent?.includes(t('length.risk')) ?? false, 'Initial audit');
         await plugin.app.vault.modify(file, '{ invalid');
-        button(row, '刷新');
+        button(row, t('action.refresh'));
         await wait(() => endpoint.store.getStatus(definition.id).kind === 'stale', 'Failed refresh fallback');
-        await wait(() => root.textContent?.includes('使用旧缓存（刷新失败）') ?? false, 'Render stale status');
+        await wait(() => root.textContent?.includes(t('status.stale')) ?? false, 'Render stale status');
         equal((await endpoint.store.getActive(definition.id)).id, firstSnapshot);
         for (const modal of [...endpoint.uiModals]) modal.close();
         await plugin.app.vault.modify(file, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
-        row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, '刷新');
-        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === '确认并加载' && !item.disabled), 'Refresh preview');
-        button(document, '确认并加载');
+        row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('action.refresh'));
+        await wait(() => Array.from(document.querySelectorAll('button')).some(item => item.textContent === t('action.load') && !item.disabled), 'Refresh preview');
+        button(document, t('action.load'));
         await wait(() => endpoint.store.getStatus(definition.id).snapshotId !== firstSnapshot, 'Publish refreshed snapshot');
-        await wait(() => root.textContent?.includes('检查已过期') ?? false, 'Expire old audit');
+        await wait(() => root.textContent?.includes(t('length.expired')) ?? false, 'Expire old audit');
       });
     } },
     { name: 'settings/rules-and-force-warning', run: async () => {
       await endpoint.store.saveRules(structuredClone(DEFAULT_RULES));
       await mounted(async root => {
-        field('行内代码', 'never');
+        field(t('region.inlineCode'), 'never');
         await wait(() => endpoint.store.getRules().regions.inlineCode === 'never', 'Persist region policy');
-        const force = root.querySelector<HTMLInputElement>('[aria-label="强制模式"]'); ok(force); force.click();
-        await wait(() => document.body.textContent?.includes('开启强制模式？') ?? false, 'Force warning');
-        button(document, '取消');
+        const force = root.querySelector<HTMLInputElement>(`[aria-label="${t('settings.force')}"]`); ok(force); force.click();
+        await wait(() => document.body.textContent?.includes(t('settings.forceTitle')) ?? false, 'Force warning');
+        button(document, t('action.cancel'));
         await wait(() => !force.checked, 'Cancel force mode'); equal(endpoint.store.getRules().force, false);
-        force.click(); button(document, '开启强制模式');
+        force.click(); button(document, t('settings.enableForce'));
         await wait(() => endpoint.store.getRules().force, 'Persist force mode');
       });
       await endpoint.store.saveRules(structuredClone(DEFAULT_RULES));
@@ -211,8 +218,8 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await endpoint.store.activate(definition, prepared);
       try {
         await mounted(async root => {
-          const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, '等长检查');
-          await wait(() => row.textContent?.includes('检查不完整') ?? false, 'Incomplete audit badge');
+          const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('length.check'));
+          await wait(() => row.textContent?.includes(t('length.incomplete')) ?? false, 'Incomplete audit badge');
           ok(row.textContent?.includes(prepared.id));
         });
       } finally { await endpoint.store.remove(definition.id); endpoint.lengthReports.delete(definition.id); endpoint.syncSchemeCommands(); }
@@ -221,8 +228,8 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const { definition } = await add(root, `Risk ${crypto.randomUUID()}`, { 软件: '軟體字' });
         const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`);
-        ok(row); button(row, '等长检查');
-        try { await wait(() => row.textContent?.includes('存在长度风险') ?? false); }
+        ok(row); button(row, t('length.check'));
+        try { await wait(() => row.textContent?.includes(t('length.risk')) ?? false); }
         catch { throw new Error(`Length report UI: ${row.textContent}`); }
         ok(row.textContent?.includes(endpoint.store.getStatus(definition.id).snapshotId ?? 'MISSING_SNAPSHOT'));
       });

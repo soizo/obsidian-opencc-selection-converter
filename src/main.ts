@@ -8,7 +8,8 @@ import { EngineClient } from './engine/client';
 import { SchemeStore } from './schemes/store';
 import type { LengthReport } from './engine/types';
 import { ConverterSettingsTab } from './settings';
-import { SchemePicker, safeError, safeLocation } from './scheme-modal';
+import { SchemePicker, safeError } from './scheme-modal';
+import { t } from './i18n';
 
 declare const __TEST__: boolean;
 export type ConversionOutcome = { changed: boolean; code: string; error?: PluginError };
@@ -26,18 +27,19 @@ export default class OpenCCSelectionConverter extends Plugin {
     this.registerEditorExtension(editorExtension);
     this.addCommand({
       id: 'convert-default',
-      name: '转换选区（默认方案）',
+      name: t('command.convertDefault'),
       callback: () => this.convertDefault(),
     });
     this.addSettingTab(new ConverterSettingsTab(this.app, this));
-    this.addCommand({ id: 'convert-with-scheme', name: '选择方案转换选区', callback: () => this.pickScheme() });
+    this.addCommand({ id: 'convert-with-scheme', name: t('command.pickScheme'), callback: () => this.pickScheme() });
     this.syncSchemeCommands();
     this.registerEvent(this.app.workspace.on('editor-menu', (menu, _editor, info) => {
       if (!(info instanceof MarkdownView)) return;
       let target: CapturedTarget;
       try { target = captureTarget(info); } catch { return; }
-      menu.addItem(item => item.setTitle('OpenCC：使用默认方案转换选区').onClick(() => { void this.convertDefault(target); }));
-      menu.addItem(item => item.setTitle('OpenCC：选择方案转换选区').onClick(() => this.pickScheme(target)));
+      for (const definition of this.store.getDefinitions()) {
+        menu.addItem(item => item.setTitle(definition.name).onClick(() => { void this.runCaptured(target, definition.id); }));
+      }
     }));
     if (__TEST__) {
       const { attachCliTests } = await import('../tests/cli/run');
@@ -57,9 +59,9 @@ export default class OpenCCSelectionConverter extends Plugin {
     const cancel = () => controller.abort();
     let registered = false;
     const check = () => {
-      if (controller.signal.aborted) throw new PluginError('CANCELLED', '转换已取消。');
+      if (controller.signal.aborted) throw new PluginError('CANCELLED', t('notice.cancelled'));
       assertTargetCurrent(target);
-      if (!this.store.getDefinitions().some(definition => definition.id === schemeId)) throw new PluginError('NO_SCHEME', '方案已删除或尚未准备完成。');
+      if (!this.store.getDefinitions().some(definition => definition.id === schemeId)) throw new PluginError('NO_SCHEME', t('notice.schemeUnavailable'));
     };
     try {
       if (signal.aborted) controller.abort();
@@ -81,7 +83,7 @@ export default class OpenCCSelectionConverter extends Plugin {
       commitPatch(target, patch);
       return { changed: true, code: 'CHANGED' };
     } catch (error) {
-      const failure = error instanceof PluginError ? error : new PluginError('UNEXPECTED_ERROR', '转换失败，未提交结果。');
+      const failure = error instanceof PluginError ? error : new PluginError('UNEXPECTED_ERROR', t('notice.failed'));
       return { changed: false, code: failure.code, error: failure };
     } finally {
       signal.removeEventListener('abort', cancel);
@@ -95,7 +97,7 @@ export default class OpenCCSelectionConverter extends Plugin {
     for (const definition of this.store.getDefinitions()) {
       const command = this.addCommand({
         id: `convert:${definition.id}`,
-        name: `转换选区：${definition.name} — ${safeLocation(definition.source.location)}`,
+        name: t('command.convertWith', { name: definition.name }),
         callback: async () => {
           try { await this.runCaptured(this.activeTarget(), definition.id); }
           catch (error) { new Notice(safeError(error)); }
@@ -107,14 +109,14 @@ export default class OpenCCSelectionConverter extends Plugin {
 
   private activeTarget(): CapturedTarget {
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) throw new PluginError('UNSUPPORTED_VIEW', '请在 Markdown 编辑器中转换选区。');
+    if (!view) throw new PluginError('UNSUPPORTED_VIEW', t('notice.markdownOnly'));
     return captureTarget(view);
   }
 
   pickScheme(target?: CapturedTarget): void {
     try {
       const captured = target ?? this.activeTarget();
-      if (!this.store.getDefinitions().length) throw new PluginError('NO_SCHEME', '请先在设置中添加并加载方案。');
+      if (!this.store.getDefinitions().length) throw new PluginError('NO_SCHEME', t('notice.noSchemes'));
       new SchemePicker(this, definition => { void this.runCaptured(captured, definition.id); }).open();
     } catch (error) { new Notice(safeError(error)); }
   }
@@ -122,8 +124,8 @@ export default class OpenCCSelectionConverter extends Plugin {
   private async runCaptured(target: CapturedTarget, id: string): Promise<ConversionOutcome> {
     const outcome = await this.convertSelection(target, id, new AbortController().signal);
     if (outcome.error) new Notice(safeError(outcome.error));
-    else if (outcome.code === 'NO_CHANGE') new Notice('选区文字无需转换。');
-    else if (outcome.code === 'SKIPPED') new Notice('选区被当前区域策略跳过。');
+    else if (outcome.code === 'NO_CHANGE') new Notice(t('notice.noChange'));
+    else if (outcome.code === 'SKIPPED') new Notice(t('notice.skipped'));
     return outcome;
   }
 
@@ -131,10 +133,10 @@ export default class OpenCCSelectionConverter extends Plugin {
     try {
       const target = captured ?? this.activeTarget();
       const schemeId = this.store.getDefaultId();
-      if (!schemeId) throw new PluginError('NO_SCHEME', '请先添加 OpenCC 方案。');
+      if (!schemeId) throw new PluginError('NO_SCHEME', t('notice.noDefault'));
       return await this.runCaptured(target, schemeId);
     } catch (error) {
-      const failure = error instanceof PluginError ? error : new PluginError('UNEXPECTED_ERROR', '转换未执行，请重试。');
+      const failure = error instanceof PluginError ? error : new PluginError('UNEXPECTED_ERROR', t('notice.notRun'));
       new Notice(safeError(failure));
       return { changed: false, code: failure.code };
     }
