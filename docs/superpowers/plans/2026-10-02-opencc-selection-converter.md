@@ -10,7 +10,7 @@
 
 **Spec:** [已批准设计](../specs/2026-10-02-opencc-selection-converter-design.md)。执行者先完整阅读设计及[可行性记录](../../feasibility.md)。
 
-**Status:** 书面设计已获用户确认；本实施计划待审核。下面均为待实现任务，不是已有接口或通过的验收。
+**Status:** 书面设计与实施计划已获用户确认，当前会话直接执行。勾选项表示已完成步骤；未勾选项仍是待实现/待验收目标，不代表现有能力。
 
 ## Global Constraints
 
@@ -96,15 +96,15 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** 产出 `OpenCCSelectionConverter extends Plugin`，ID `opencc-selection-converter`；`captureTarget(view: MarkdownView): CapturedTarget` 捕获传入的 MarkdownView/EditorView、文件、文档 revision 和单选区，不提供隐式全文范围。CapturedTarget 在 editor.ts 定义为 `{view,cm,file,filePath,doc,revision,selectionRevision,selection,anchor,head}`；file 为 TFile 身份，filePath 是捕获时路径字符串，doc 为不可变 CM6 Text，selection 为排序后的 Span，anchor/head 保留方向。产出上述 CLI 驱动与断言；初始无方案时只提示添加方案，不放占位转换算法。
 
-- [ ] **写失败用例。** `smoke/no-selection`、`smoke/unsupported-view`、`smoke/wrong-vault`：
+- [x] **写失败用例。** `smoke/no-selection`、`smoke/unsupported-view`、`smoke/wrong-vault`：
   ```ts
   equal(await invokeDefaultWithNoSelection(), {changed:false, code:'NO_SELECTION'});
   equal(await invokeDefaultInReadingMode(), {changed:false, code:'UNSUPPORTED_VIEW'});
   equal(await targetVaultGuardWithWrongExpectedPath(), {writes:0, rejected:true});
   ```
-- [ ] **运行红灯。** `npm run test:cli -- smoke`；确认真实 CLI 报告插件/命令缺失，或者保护断言失败。先让 runner 能报告失败，再实现插件行为，不把构建错误当完整行为回归证据。
-- [ ] **实现最小闭环。** 创建真实插件及构建；通过 editor extension 与公开 editorInfoField 建立 Editor→EditorView 关联，不依赖 editor.cm 或 state.values 私有结构；记录原始编辑视图而非操作时猜活动文件；源码/实时预览由统一入口识别。`limits.ts` 写入设计全部固定边界；测试入口只在 test define 下编译，读取结果路径受 vault guard 限制。
-- [ ] **验证。** `npm run check && npm run test:cli -- smoke`；至少上述三个命名用例通过；生产构建查不到 `runCliSuite`，不创建笔记正文缓存。
+- [x] **运行红灯。** `npm run test:cli -- smoke`；确认真实 CLI 报告插件/命令缺失，或者保护断言失败。先让 runner 能报告失败，再实现插件行为，不把构建错误当完整行为回归证据。
+- [x] **实现最小闭环。** 创建真实插件及构建；通过 editor extension 与公开 editorInfoField 建立 Editor→EditorView 关联，不依赖 editor.cm 或 state.values 私有结构；记录原始编辑视图而非操作时猜活动文件；源码/实时预览由统一入口识别。`limits.ts` 写入设计全部固定边界；测试入口只在 test define 下编译，读取结果路径受 vault guard 限制。
+- [x] **验证。** `npm run check && npm run test:cli -- smoke`；至少上述三个命名用例通过；生产构建查不到 `runCliSuite`，不创建笔记正文缓存。
 - [ ] **提交。** 显式 stage 本任务 Files 中的新文件（不 stage dist、vault 或 `.opencc-test-results`），`git commit -m "feat: add plugin entry and Obsidian CLI test harness"`。
 
 ### Task 2: 固定版原生 OpenCC 的离线 WASM 运行

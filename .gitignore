@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+.superpowers/
+.pi/tasks/
+.dotdotgod/context/
+*.tsbuildinfo
+.DS_Store
