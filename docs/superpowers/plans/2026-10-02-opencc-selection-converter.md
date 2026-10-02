@@ -186,17 +186,19 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** 在既有 Span/RuleSettings 之上定义 `Region={id:string,kind:RegionKind,source:Span,parentId:string|null}` 与 Projection；`projectMarkdown(state: EditorState, selection: Span, rules: RuleSettings): Projection`。`regionAllows(region: Region, selection: Span, rules: RuleSettings): boolean` 使用原选区，包含父链。数学区域先记录待解析节点，不将它误当普通正文放行；任务 7 接入后才验收数学转换。
 
-- [ ] **写失败用例。** `markdown/visible-runs`、`markdown/inside-rule`、`markdown/partial-unit`：
+- [x] **写失败用例。** `markdown/visible-runs`、`markdown/inside-rule`、`markdown/partial-unit`：
   ```ts
   equal(projectedText('软**件**'), '软件');
   equal(projectedText('[说明](https://example.com/软件)'), '说明');
   equal(eligibleRunsForWholeNote('正文\n`代码`'), ['正文']);
   equal(sourceRangeOfVisibleEscapedBracket(), {from:0,to:2});
   ```
-- [ ] **运行红灯。** `npm run test:cli -- markdown`，在真实 CM6 源码/实时预览状态构建同一组 fixture，断言纯投影结果而非浏览器截图猜测。
-- [ ] **实现适配和区域树。** 使用公开 syntaxTree/ensureSyntaxTree 及注册的 editor extension，禁止索引 state.values。解析整块上下文后裁剪选区；语法树未覆盖完整上下文则报错。合并连续引用行、处理 fenced/indented code、多反引号 inline code、表格单元格；隐藏注释/frontmatter、目标/图片/嵌入、Callout 元数据按设计保护；实体使用平台解码并限制单元数量，不自行维护 HTML 实体大全。记录结构指纹供重解析比较。
-- [ ] **验证。** `npm run test:cli -- markdown`；六策略中的代码/引用递归矩阵；父跳过优先；横跨两个区不伪装 inside；每个物理换行/被跳过区中断拼词；标题、列表、表格、链接别名、裸 URL、脚注、隐藏内容与 raw HTML 报错；组合字符及半个 UTF-16 字符边界不误定位。未启用数学解析前数学是显式 unsupported，不声称全套投影已完成。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: project visible Markdown with nested region policies"`。
+- [x] **运行红灯。** `npm run test:cli -- markdown`，在真实 CM6 源码/实时预览状态构建同一组 fixture，断言纯投影结果而非浏览器截图猜测。
+- [x] **实现适配和区域树。** 使用公开 syntaxTree/ensureSyntaxTree 及注册的 editor extension，禁止索引 state.values。解析整块上下文后裁剪选区；语法树未覆盖完整上下文则报错。合并连续引用行、处理 fenced/indented code、多反引号 inline code、表格单元格；隐藏注释/frontmatter、目标/图片/嵌入、Callout 元数据按设计保护；实体使用平台解码并限制单元数量，不自行维护 HTML 实体大全。记录结构指纹供重解析比较。
+- [x] **验证。** `npm run test:cli -- markdown`；六策略中的代码/引用递归矩阵；父跳过优先；横跨两个区不伪装 inside；每个物理换行/被跳过区中断拼词；标题、列表、表格、链接别名、裸 URL、脚注、隐藏内容与 raw HTML 报错；组合字符及半个 UTF-16 字符边界不误定位。未启用数学解析前数学是显式 unsupported，不声称全套投影已完成。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: project visible Markdown with nested region policies"`。
+
+初版验收：全套 CLI 78/78；复杂无别名 wikilink（路径/标题/块引用）仍明确拒绝，留待最终兼容性验收，不宣称全套投影已完成。
 
 ### Task 7: 明确支持集合内的 LaTeX 嵌套投影
 

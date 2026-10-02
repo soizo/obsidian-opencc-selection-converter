@@ -1,0 +1,674 @@
+[
+  {
+    "name": "Document",
+    "from": 0,
+    "to": 386,
+    "text": "---\nname: 隐藏\n---\n# 标题\n软**件** 与 *文字* ~~删除~~ ==高亮==\n[说明](https://example.com/软件 \"标题\") [[目标|别名]] [[目标]] ![[嵌入]] ![图片](image.png)\n\\[说明\\] &amp; &#x4E2D;\n> [!note] 标题\n> 正文 `代码`\n\n```js\n软件\n```\n\n    缩进代码\n\n| 左 | 右 |\n| -- | -- |\n| 软件 | 文字 |\n\n%% 隐藏 %% <!-- 隐藏 -->\n正文[^注] https://example.com/软件\n[^注]: 脚注正文\n$x$ <span>HTML</span>\n\n[说明][id]\n\n[id]: https://example.com/软件 \"标题\"\n甲<https://example.com/软件>乙"
+  },
+  {
+    "name": "def_hmd-frontmatter",
+    "from": 0,
+    "to": 3,
+    "text": "---"
+  },
+  {
+    "name": "atom_hmd-frontmatter",
+    "from": 4,
+    "to": 8,
+    "text": "name"
+  },
+  {
+    "name": "hmd-frontmatter_meta",
+    "from": 8,
+    "to": 10,
+    "text": ": "
+  },
+  {
+    "name": "hmd-frontmatter",
+    "from": 10,
+    "to": 12,
+    "text": "隐藏"
+  },
+  {
+    "name": "def_hmd-frontmatter",
+    "from": 13,
+    "to": 16,
+    "text": "---"
+  },
+  {
+    "name": "HyperMD-header_HyperMD-header-1",
+    "from": 17,
+    "to": 21,
+    "text": "# 标题"
+  },
+  {
+    "name": "formatting_formatting-header_formatting-header-1_header_header-1",
+    "from": 17,
+    "to": 19,
+    "text": "# "
+  },
+  {
+    "name": "header_header-1",
+    "from": 19,
+    "to": 21,
+    "text": "标题"
+  },
+  {
+    "name": "formatting_formatting-strong_strong",
+    "from": 23,
+    "to": 25,
+    "text": "**"
+  },
+  {
+    "name": "strong",
+    "from": 25,
+    "to": 26,
+    "text": "件"
+  },
+  {
+    "name": "formatting_formatting-strong_strong",
+    "from": 26,
+    "to": 28,
+    "text": "**"
+  },
+  {
+    "name": "em_formatting_formatting-em",
+    "from": 31,
+    "to": 32,
+    "text": "*"
+  },
+  {
+    "name": "em",
+    "from": 32,
+    "to": 34,
+    "text": "文字"
+  },
+  {
+    "name": "em_formatting_formatting-em",
+    "from": 34,
+    "to": 35,
+    "text": "*"
+  },
+  {
+    "name": "formatting_formatting-strikethrough_strikethrough",
+    "from": 36,
+    "to": 38,
+    "text": "~~"
+  },
+  {
+    "name": "strikethrough",
+    "from": 38,
+    "to": 40,
+    "text": "删除"
+  },
+  {
+    "name": "formatting_formatting-strikethrough_strikethrough",
+    "from": 40,
+    "to": 42,
+    "text": "~~"
+  },
+  {
+    "name": "formatting_formatting-highlight_highlight",
+    "from": 43,
+    "to": 45,
+    "text": "=="
+  },
+  {
+    "name": "highlight",
+    "from": 45,
+    "to": 47,
+    "text": "高亮"
+  },
+  {
+    "name": "formatting_formatting-highlight_highlight",
+    "from": 47,
+    "to": 49,
+    "text": "=="
+  },
+  {
+    "name": "formatting_formatting-link_link",
+    "from": 50,
+    "to": 51,
+    "text": "["
+  },
+  {
+    "name": "link",
+    "from": 51,
+    "to": 53,
+    "text": "说明"
+  },
+  {
+    "name": "formatting_formatting-link_link",
+    "from": 53,
+    "to": 54,
+    "text": "]"
+  },
+  {
+    "name": "formatting_formatting-link-string_string_url",
+    "from": 54,
+    "to": 55,
+    "text": "("
+  },
+  {
+    "name": "string_url",
+    "from": 55,
+    "to": 82,
+    "text": "https://example.com/软件 \"标题\""
+  },
+  {
+    "name": "formatting_formatting-link-string_string_url",
+    "from": 82,
+    "to": 83,
+    "text": ")"
+  },
+  {
+    "name": "formatting-link_formatting-link-start",
+    "from": 84,
+    "to": 86,
+    "text": "[["
+  },
+  {
+    "name": "hmd-internal-link_link-has-alias",
+    "from": 86,
+    "to": 88,
+    "text": "目标"
+  },
+  {
+    "name": "hmd-internal-link_link-alias-pipe",
+    "from": 88,
+    "to": 89,
+    "text": "|"
+  },
+  {
+    "name": "hmd-internal-link_link-alias",
+    "from": 89,
+    "to": 91,
+    "text": "别名"
+  },
+  {
+    "name": "formatting-link_formatting-link-end",
+    "from": 91,
+    "to": 93,
+    "text": "]]"
+  },
+  {
+    "name": "formatting-link_formatting-link-start",
+    "from": 94,
+    "to": 96,
+    "text": "[["
+  },
+  {
+    "name": "hmd-internal-link",
+    "from": 96,
+    "to": 98,
+    "text": "目标"
+  },
+  {
+    "name": "formatting-link_formatting-link-end",
+    "from": 98,
+    "to": 100,
+    "text": "]]"
+  },
+  {
+    "name": "formatting-embed_formatting-link_formatting-link-start",
+    "from": 101,
+    "to": 104,
+    "text": "![["
+  },
+  {
+    "name": "hmd-embed_hmd-internal-link",
+    "from": 104,
+    "to": 106,
+    "text": "嵌入"
+  },
+  {
+    "name": "formatting-link_formatting-link-end",
+    "from": 106,
+    "to": 108,
+    "text": "]]"
+  },
+  {
+    "name": "formatting_formatting-image_image_image-marker",
+    "from": 109,
+    "to": 110,
+    "text": "!"
+  },
+  {
+    "name": "formatting_formatting-image_image_image-alt-text_link",
+    "from": 110,
+    "to": 111,
+    "text": "["
+  },
+  {
+    "name": "image_image-alt-text_link",
+    "from": 111,
+    "to": 113,
+    "text": "图片"
+  },
+  {
+    "name": "formatting_formatting-image_image_image-alt-text_link",
+    "from": 113,
+    "to": 114,
+    "text": "]"
+  },
+  {
+    "name": "formatting_formatting-link-string_string_url",
+    "from": 114,
+    "to": 115,
+    "text": "("
+  },
+  {
+    "name": "string_url",
+    "from": 115,
+    "to": 124,
+    "text": "image.png"
+  },
+  {
+    "name": "formatting_formatting-link-string_string_url",
+    "from": 124,
+    "to": 125,
+    "text": ")"
+  },
+  {
+    "name": "formatting-escape_hmd-escape-backslash",
+    "from": 126,
+    "to": 127,
+    "text": "\\"
+  },
+  {
+    "name": "escape_hmd-escape-char",
+    "from": 127,
+    "to": 128,
+    "text": "["
+  },
+  {
+    "name": "formatting-escape_hmd-escape-backslash",
+    "from": 130,
+    "to": 131,
+    "text": "\\"
+  },
+  {
+    "name": "escape_hmd-escape-char",
+    "from": 131,
+    "to": 132,
+    "text": "]"
+  },
+  {
+    "name": "HyperMD-callout_HyperMD-quote_HyperMD-quote-1",
+    "from": 148,
+    "to": 160,
+    "text": "> [!note] 标题"
+  },
+  {
+    "name": "formatting_formatting-quote_formatting-quote-1_hmd-callout_quote_quote-1",
+    "from": 148,
+    "to": 158,
+    "text": "> [!note] "
+  },
+  {
+    "name": "quote_quote-1",
+    "from": 158,
+    "to": 160,
+    "text": "标题"
+  },
+  {
+    "name": "HyperMD-quote_HyperMD-quote-1",
+    "from": 161,
+    "to": 170,
+    "text": "> 正文 `代码`"
+  },
+  {
+    "name": "formatting_formatting-quote_formatting-quote-1_quote_quote-1",
+    "from": 161,
+    "to": 163,
+    "text": "> "
+  },
+  {
+    "name": "quote_quote-1",
+    "from": 163,
+    "to": 166,
+    "text": "正文 "
+  },
+  {
+    "name": "formatting_formatting-code_inline-code_quote_quote-1",
+    "from": 166,
+    "to": 167,
+    "text": "`"
+  },
+  {
+    "name": "inline-code_quote_quote-1",
+    "from": 167,
+    "to": 169,
+    "text": "代码"
+  },
+  {
+    "name": "formatting_formatting-code_inline-code_quote_quote-1",
+    "from": 169,
+    "to": 170,
+    "text": "`"
+  },
+  {
+    "name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg",
+    "from": 172,
+    "to": 177,
+    "text": "```js"
+  },
+  {
+    "name": "formatting_formatting-code-block_hmd-codeblock",
+    "from": 172,
+    "to": 177,
+    "text": "```js"
+  },
+  {
+    "name": "HyperMD-codeblock_HyperMD-codeblock-bg",
+    "from": 178,
+    "to": 180,
+    "text": "软件"
+  },
+  {
+    "name": "hmd-codeblock_variable",
+    "from": 178,
+    "to": 180,
+    "text": "软件"
+  },
+  {
+    "name": "HyperMD-codeblock_HyperMD-codeblock-bg_HyperMD-codeblock-end_HyperMD-codeblock-end-bg",
+    "from": 181,
+    "to": 184,
+    "text": "```"
+  },
+  {
+    "name": "formatting_formatting-code-block_hmd-codeblock",
+    "from": 181,
+    "to": 184,
+    "text": "```"
+  },
+  {
+    "name": "hmd-indented-code_inline-code",
+    "from": 190,
+    "to": 194,
+    "text": "缩进代码"
+  },
+  {
+    "name": "HyperMD-table-2_HyperMD-table-row_HyperMD-table-row-0",
+    "from": 196,
+    "to": 205,
+    "text": "| 左 | 右 |"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 196,
+    "to": 197,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-0",
+    "from": 200,
+    "to": 201,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 204,
+    "to": 205,
+    "text": "|"
+  },
+  {
+    "name": "HyperMD-table-2_HyperMD-table-row_HyperMD-table-row-1",
+    "from": 206,
+    "to": 217,
+    "text": "| -- | -- |"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 206,
+    "to": 207,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-0",
+    "from": 211,
+    "to": 212,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 216,
+    "to": 217,
+    "text": "|"
+  },
+  {
+    "name": "HyperMD-table-2_HyperMD-table-row_HyperMD-table-row-2",
+    "from": 218,
+    "to": 229,
+    "text": "| 软件 | 文字 |"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 218,
+    "to": 219,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-0",
+    "from": 223,
+    "to": 224,
+    "text": "|"
+  },
+  {
+    "name": "hmd-table-sep_hmd-table-sep-dummy",
+    "from": 228,
+    "to": 229,
+    "text": "|"
+  },
+  {
+    "name": "comment_comment-start_formatting",
+    "from": 231,
+    "to": 233,
+    "text": "%%"
+  },
+  {
+    "name": "comment",
+    "from": 233,
+    "to": 237,
+    "text": " 隐藏 "
+  },
+  {
+    "name": "comment_comment-end_formatting",
+    "from": 237,
+    "to": 239,
+    "text": "%%"
+  },
+  {
+    "name": "comment",
+    "from": 240,
+    "to": 251,
+    "text": "<!-- 隐藏 -->"
+  },
+  {
+    "name": "footref_formatting_formatting-link_formatting-link-start_hmd-barelink",
+    "from": 254,
+    "to": 256,
+    "text": "[^"
+  },
+  {
+    "name": "footref_hmd-barelink",
+    "from": 256,
+    "to": 257,
+    "text": "注"
+  },
+  {
+    "name": "footref_formatting_formatting-link_formatting-link-end_hmd-barelink",
+    "from": 257,
+    "to": 258,
+    "text": "]"
+  },
+  {
+    "name": "url",
+    "from": 259,
+    "to": 281,
+    "text": "https://example.com/软件"
+  },
+  {
+    "name": "HyperMD-footnote",
+    "from": 282,
+    "to": 292,
+    "text": "[^注]: 脚注正文"
+  },
+  {
+    "name": "formatting_formatting-link_hmd-barelink_hmd-footnote_link",
+    "from": 282,
+    "to": 284,
+    "text": "[^"
+  },
+  {
+    "name": "hmd-barelink_hmd-barelink_hmd-footnote_hmd-footnote_link",
+    "from": 284,
+    "to": 285,
+    "text": "注"
+  },
+  {
+    "name": "formatting_formatting-link_hmd-barelink_hmd-footnote_link",
+    "from": 285,
+    "to": 287,
+    "text": "]:"
+  },
+  {
+    "name": "formatting_formatting-math_formatting-math-begin_keyword_math",
+    "from": 293,
+    "to": 294,
+    "text": "$"
+  },
+  {
+    "name": "math_variable-2",
+    "from": 294,
+    "to": 295,
+    "text": "x"
+  },
+  {
+    "name": "formatting_formatting-math_formatting-math-end_keyword_math_math-",
+    "from": 295,
+    "to": 296,
+    "text": "$"
+  },
+  {
+    "name": "bracket_hmd-html-begin_tag",
+    "from": 297,
+    "to": 298,
+    "text": "<"
+  },
+  {
+    "name": "tag",
+    "from": 298,
+    "to": 302,
+    "text": "span"
+  },
+  {
+    "name": "bracket_tag",
+    "from": 302,
+    "to": 303,
+    "text": ">"
+  },
+  {
+    "name": "bracket_tag",
+    "from": 307,
+    "to": 309,
+    "text": "</"
+  },
+  {
+    "name": "tag",
+    "from": 309,
+    "to": 313,
+    "text": "span"
+  },
+  {
+    "name": "bracket_hmd-html-end_tag",
+    "from": 313,
+    "to": 314,
+    "text": ">"
+  },
+  {
+    "name": "formatting_formatting-link_link",
+    "from": 316,
+    "to": 317,
+    "text": "["
+  },
+  {
+    "name": "link",
+    "from": 317,
+    "to": 319,
+    "text": "说明"
+  },
+  {
+    "name": "formatting_formatting-link_link",
+    "from": 319,
+    "to": 320,
+    "text": "]"
+  },
+  {
+    "name": "formatting_formatting-link-string_hmd-footref2_string_url",
+    "from": 320,
+    "to": 321,
+    "text": "["
+  },
+  {
+    "name": "hmd-footref2_string_url",
+    "from": 321,
+    "to": 323,
+    "text": "id"
+  },
+  {
+    "name": "formatting_formatting-link-string_hmd-footref2_string_url",
+    "from": 323,
+    "to": 324,
+    "text": "]"
+  },
+  {
+    "name": "HyperMD-footnote",
+    "from": 326,
+    "to": 359,
+    "text": "[id]: https://example.com/软件 \"标题\""
+  },
+  {
+    "name": "formatting_formatting-link_hmd-barelink_hmd-footnote_link",
+    "from": 326,
+    "to": 327,
+    "text": "["
+  },
+  {
+    "name": "hmd-barelink_hmd-barelink_hmd-footnote_hmd-footnote_link",
+    "from": 327,
+    "to": 329,
+    "text": "id"
+  },
+  {
+    "name": "formatting_formatting-link_hmd-barelink_hmd-footnote_link",
+    "from": 329,
+    "to": 331,
+    "text": "]:"
+  },
+  {
+    "name": "hmd-footnote-url_url",
+    "from": 332,
+    "to": 354,
+    "text": "https://example.com/软件"
+  },
+  {
+    "name": "hmd-footnote-url-title",
+    "from": 355,
+    "to": 359,
+    "text": "\"标题\""
+  },
+  {
+    "name": "formatting_formatting-link_link",
+    "from": 361,
+    "to": 362,
+    "text": "<"
+  },
+  {
+    "name": "formatting_formatting-link_link_url",
+    "from": 362,
+    "to": 384,
+    "text": "https://example.com/软件"
+  }
+]
