@@ -220,6 +220,7 @@ export class SchemeStore {
     if (typeof captured.id !== 'string' || typeof captured.name !== 'string' || !['url', 'vault'].includes(captured.source?.kind) || typeof captured.source.location !== 'string') throw new PluginError('INVALID_CONFIG', '草稿结构无效。');
     return this.update(next => { next.drafts = [...(next.drafts ?? []).filter(draft => draft.id !== captured.id), captured]; });
   }
+  getDrafts(): readonly SchemeDefinition[] { return structuredClone(this.state.drafts ?? []); }
   getDraft(id: string): SchemeDefinition | null { return structuredClone(this.state.drafts?.find(draft => draft.id === id) ?? null); }
   async saveRules(rules: RuleSettings): Promise<void> {
     validateRules(rules);

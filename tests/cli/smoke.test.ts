@@ -17,10 +17,15 @@ export function smokeTests(plugin: TestPlugin) {
       equal(await plugin.app.vault.read(view.file!), '阅读模式 软件');
     } },
     { name: 'smoke/selected-without-scheme', run: async () => {
-      const view = await openFixture(plugin.app, '前缀 软件 后缀');
-      view.editor.setSelection({ line: 0, ch: 3 }, { line: 0, ch: 5 });
-      equal(await plugin.convertDefault(), { changed: false, code: 'NO_SCHEME' });
-      equal(view.editor.getValue(), '前缀 软件 后缀');
+      const store = (plugin as TestPlugin & { store: { getDefaultId(): string | null; setDefault(id: string | null): Promise<void> } }).store;
+      const previous = store.getDefaultId();
+      if (previous !== null) await store.setDefault(null);
+      try {
+        const view = await openFixture(plugin.app, '前缀 软件 后缀');
+        view.editor.setSelection({ line: 0, ch: 3 }, { line: 0, ch: 5 });
+        equal(await plugin.convertDefault(), { changed: false, code: 'NO_SCHEME' });
+        equal(view.editor.getValue(), '前缀 软件 后缀');
+      } finally { if (previous !== null) await store.setDefault(previous); }
     } },
     { name: 'smoke/multiple-selections', run: async () => {
       const view = await openFixture(plugin.app, '前缀 软件 后缀');

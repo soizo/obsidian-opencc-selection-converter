@@ -260,17 +260,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `ConverterSettingsTab extends PluginSettingTab`、`SchemeEditModal extends Modal`、`SchemePicker extends FuzzySuggestModal<SchemeDefinition>`；使用 prepareScheme/loadPrepared/activate，不另做下载器。独立命令 ID `convert:<schemeId>`，默认 `convert-default`、选择 `convert-with-scheme`；重命名不改 ID。
 
-- [ ] **写失败用例。** `settings/crud-default`、`settings/resource-consent`、`settings/length-report`：
+- [x] **写失败用例。** `settings/crud-default`、`settings/resource-consent`、`settings/length-report`：
   ```ts
   equal(commandIdAfterRename(), commandIdBeforeRename());
   equal(requestCountBeforeDependencyConfirmation(), 1); // 仅配置本身
   equal(await displayedStatusAfterFailedRefresh(), '使用旧缓存（刷新失败）');
   equal(await displayedIncompleteAuditBadge(), '检查不完整');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- settings`，通过 CLI eval/DOM 触发真实输入、按钮、菜单事件，不仅调用 store 内部方法。
-- [ ] **实现交互。** 原生 Setting/Modal/TextComponent/Button 等，来源状态和失败原因可读；添加/编辑先预览依赖并确认；默认方案、独立稳定命令、删除确认、六类策略和 force 警示持久化；名称/错误文本用 textContent，不注入 HTML；等长检查显示完整/风险/不完整及快照版本。重名显示来源帮助区分，不禁止合理重名；快捷键由宿主管理。
-- [ ] **验证。** `npm run test:cli -- settings`；右键与命令面板到同一转换路径；用 CLI hotkey 查询确认独立 ID 可绑定，并仅在测试 vault 验证绑定；取消和重复点击、隐藏高级字段、HTTP 风险确认、无默认方案提示、删除默认不偷偷选另一项、刷新使旧审计过期、错误中 query/凭据脱敏；键盘可达、可辨识 label、加载状态不抢焦点。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: add native scheme management and conversion controls"`。
+- [x] **运行红灯。** `npm run test:cli -- settings`，通过 CLI eval/DOM 触发真实输入、按钮、菜单事件，不仅调用 store 内部方法。
+- [x] **实现交互。** 原生 Setting/Modal/TextComponent/Button 等，来源状态和失败原因可读；添加/编辑先预览依赖并确认；默认方案、独立稳定命令、删除确认、六类策略和 force 警示持久化；名称/错误文本用 textContent，不注入 HTML；等长检查显示完整/风险/不完整及快照版本。重名显示来源帮助区分，不禁止合理重名；快捷键由宿主管理。
+- [x] **验证。** `npm run test:cli -- settings`；右键与命令面板到同一转换路径；用 CLI hotkey 查询确认独立 ID 可绑定，并仅在测试 vault 验证绑定；取消和重复点击、隐藏高级字段、HTTP 风险确认、无默认方案提示、删除默认不偷偷选另一项、刷新使旧审计过期、错误中 query/凭据脱敏；键盘可达、可辨识 label、加载状态不抢焦点。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: add native scheme management and conversion controls"`。
 
 ### Task 11: 完整 CLI 验收、移动模拟与可安装交付
 

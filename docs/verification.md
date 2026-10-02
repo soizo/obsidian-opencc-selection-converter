@@ -111,6 +111,16 @@
 - 本地 commands 声明依赖另一份较新的 state；TypeScript paths 统一到 Obsidian SDK 对应的根 state 声明。所有 CM 包仍 external，运行时始终使用宿主实例；未新增运行时依赖。
 - `npm run check && npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：**115 通过 / 0 失败**，产物 **1,131,907 字节**，许可证完整且不含测试/Node 依赖。主动 LSP：0 诊断，2 文件确认干净、2 文件未确认。
 
+## 阶段 10：原生设置与方案入口
+
+- 使用 Obsidian 原生 `PluginSettingTab`、`Setting`、`Modal` 和 `FuzzySuggestModal`。设置页管理默认方案、草稿/活动方案、六类递归区域策略和带明确风险确认的强制模式；高级依赖基址与文件映射默认折叠。
+- 添加/编辑先读取配置并展示完整依赖，确认后才读取字典。未加密 HTTP 配置先确认精确配置 URL，配置返回的 HTTP 依赖再逐项汇总确认；取消不会下载字典。加载成功后才发布快照；取消加载恢复原状态，失败刷新继续使用旧缓存并显示原因。
+- 方案 ID 在重命名后不变；每个活动方案注册稳定 `convert:<UUID>` 命令。默认命令、方案选择器、独立命令和真实 `editor-menu` 捕获的视图都进入同一 `convertSelection` 路径。CLI `commands`/`hotkey` 可查询带插件前缀的独立命令；快捷键由宿主管理。
+- 等长检查使用活动快照的真实 native enumeration，显示完整等长、长度风险或检查不完整，附快照 ID、检查数量、原因和前 20 项风险。成功刷新后旧报告明确标记过期；取消不冒充完成。
+- 状态和错误均通过 `textContent`/原生组件呈现。URL 用户信息、查询参数和片段不显示；错误中的 URL 同样脱敏。合理重名通过来源区分，不阻止使用。
+- 测试观察并修复：关闭加载后状态卡在 loading；设置测试误关闭宿主容器导致旧弹窗抢点击；桌面原生菜单会阻塞自动化，右键测试显式使用同一 Obsidian `Menu` 的 DOM 模式。测试驱动 CLI 上限从 60 秒调为 120 秒；一次超时后写出的通过报告未计为成功，使用新运行 ID 复验。
+- 设置专项最终 **11/11**，独立右键专项 **2/2**。`npm run check && npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：**126 通过 / 0 失败**，产物 **1,163,191 字节**。Impeccable 静态检测无发现；主动 LSP 0 诊断，1 文件确认干净、5 文件未确认。
+
 ## 尚未验收
 
-阶段 10–11 尚未完成：设置界面、方案选择/右键入口与完整用户工作流尚未验收；复杂无别名 wikilink 仍有兼容性缺口。默认命令可以使用已持久化的默认方案，尚无方案时返回 NO_SCHEME。尚未进行 Android/iOS 真机验证。可行性探针不替代正式插件验收。
+阶段 11 尚未完成：完整用户工作流、移动模拟与可安装交付尚未验收；复杂无别名 wikilink 仍有兼容性缺口。尚未进行 Android/iOS 真机验证。可行性探针不替代正式插件验收。

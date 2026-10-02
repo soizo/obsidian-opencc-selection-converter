@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ async function exists(file) {
 
 async function cli(...args) {
   const { stdout, stderr } = await exec('obsidian', [`vault=${vaultName}`, ...args], {
-    cwd: root, timeout: 60000, maxBuffer: 1024 * 1024,
+    cwd: root, timeout: 120000, maxBuffer: 1024 * 1024,
   });
   if (stderr.trim()) process.stderr.write(stderr);
   return stdout.trim();
@@ -83,26 +83,53 @@ async function main() {
     await mkdir(pluginDir);
     await writeFile(ownership, 'Dedicated OpenCC CLI test deployment\n');
   }
+  await cli('plugins:restrict', 'off');
+  await cli('plugin:disable', `id=${pluginId}`);
+  // Every top-level CLI invocation starts from an empty plugin cache in the dedicated synthetic vault.
+  // Reloads within this invocation retain it, so restart/offline recovery tests remain real.
+  const cacheDir = path.join(pluginDir, 'cache');
+  if (await exists(cacheDir)) { await ensureInside(vault, cacheDir); await rm(cacheDir, { recursive: true, force: true }); }
   for (const name of ['main.js', 'manifest.json', 'versions.json']) {
     const destination = path.join(pluginDir, name);
     if (await exists(destination)) await ensureInside(vault, destination);
     await copyFile(path.join(root, 'dist', name), destination);
   }
-  await cli('plugins:restrict', 'off');
+  const reloadMarker = randomUUID();
+  await evaluate(`window.__openccCliReloadMarker=${JSON.stringify(reloadMarker)}`);
+  await cli('reload');
+  const reloadDeadline = Date.now() + 30000;
+  while (Date.now() < reloadDeadline) {
+    try {
+      if (await evaluate(`window.__openccCliReloadMarker ?? 'reloaded'`) === '=> reloaded') break;
+    } catch { /* Renderer is between contexts. */ }
+    await delay(250);
+  }
+  if (await evaluate(`window.__openccCliReloadMarker ?? 'reloaded'`) !== '=> reloaded') throw new Error('Vault reload did not replace the renderer context');
   await waitForWorkspace();
   await guardVault(expectedVault);
   for (const folder of ['.opencc-test-results', '__opencc_tests__']) {
     const directory = path.join(vault, folder);
     if (await exists(directory)) await ensureInside(vault, directory);
   }
-  await cli('plugin:enable', `id=${pluginId}`, 'filter=community');
-  await cli('plugin:reload', `id=${pluginId}`);
+  let pluginLoaded = false;
+  for (let attempt = 0; attempt < 3 && !pluginLoaded; attempt++) {
+    await cli('plugin:enable', `id=${pluginId}`, 'filter=community');
+    await cli('plugin:reload', `id=${pluginId}`);
+    await delay(500);
+    pluginLoaded = await evaluate(`Boolean(app.plugins.plugins['${pluginId}']?.runCliSuite)`) === '=> true';
+    if (!pluginLoaded) await delay(1000);
+  }
+  if (!pluginLoaded) throw new Error('Test plugin did not remain loaded after vault reload');
 
-  if (suites.some(suite => ['all', 'resources', 'cache'].includes(suite))) fixture = await startFixtureServer();
+  if (suites.some(suite => ['all', 'resources', 'cache', 'settings'].includes(suite))) fixture = await startFixtureServer();
   let passed = 1;
   let failed = 0;
   const context = { fixtureOrigin: fixture?.origin, restartTicket: randomUUID() };
-  const execution = [...suites, ...(suites.some(suite => ['all', 'cache'].includes(suite)) ? ['cache-restart-prepare', 'cache-restart'] : [])];
+  const allSuites = ['smoke', 'engine', 'trace', 'config', 'resources', 'cache', 'markdown', 'latex', 'mapping', 'editor', 'settings'];
+  const execution = [
+    ...suites.flatMap(suite => suite === 'all' ? allSuites : [suite]),
+    ...(suites.some(suite => ['all', 'cache'].includes(suite)) ? ['cache-restart-prepare', 'cache-restart'] : []),
+  ];
   for (const suite of execution) {
     if (suite === 'cache-restart') {
       await fixture.close();
