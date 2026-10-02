@@ -18,6 +18,7 @@ try {
   execFileSync('npm', ['run', 'build'], { cwd: clean, stdio: 'inherit' });
   const bundle = await readFile(join(clean, 'dist/main.js'), 'utf8');
   assert(bundle.length > 0);
+  assert.equal(await readFile(join(clean, 'dist/styles.css'), 'utf8'), await readFile(join(clean, 'styles.css'), 'utf8'), 'Ship the dialog layout styles');
   assert(!/\bimport\s*\(/u.test(bundle), 'Release must not dynamically import executable code');
   console.log('PASS clean source build without local native outputs');
 } finally {

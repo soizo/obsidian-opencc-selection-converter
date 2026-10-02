@@ -62,6 +62,6 @@ await build({
   sourcemap: false,
   logLevel: 'warning',
 });
-for (const name of ['manifest.json', 'versions.json']) {
+for (const name of ['manifest.json', 'versions.json', 'styles.css']) {
   await copyFile(new URL(`../${name}`, import.meta.url), new URL(`../dist/${name}`, import.meta.url));
 }

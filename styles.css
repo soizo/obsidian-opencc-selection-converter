@@ -1,0 +1,9 @@
+/* Let Obsidian's native setting rows stack inside narrow dialogs. */
+.opencc-modal .modal-content {
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+}
+
+.opencc-modal textarea {
+  max-width: 100%;
+}

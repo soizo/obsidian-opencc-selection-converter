@@ -42,6 +42,7 @@ npm run build
 dist/main.js
 dist/manifest.json
 dist/versions.json
+dist/styles.css
 ```
 
 修改原生源码后，使用 `engine/upstream.lock.json` 固定的本地 OpenCC 与 emsdk checkout 执行 `npm run build:engine`，更新并一同提交 `engine/generated/` 中的两个生成资产，然后执行 `npm run build`。安装了固定版 SDK 的开发环境还应运行 `node scripts/verify-artifact.mjs`。

@@ -39,6 +39,7 @@ jobs:
             dist/main.js \
             dist/manifest.json \
             dist/versions.json \
+            dist/styles.css \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OpenCC Selection Converter $VERSION" \

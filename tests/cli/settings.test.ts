@@ -2,7 +2,7 @@ import { Menu, Modal, requestUrl, type Command } from 'obsidian';
 import type { LengthReport } from '../../src/engine/types';
 import type { EngineClient } from '../../src/engine/client';
 import { ConverterSettingsTab } from '../../src/settings';
-import { safeError, safeLocation } from '../../src/scheme-modal';
+import { SchemeEditModal, safeError, safeLocation } from '../../src/scheme-modal';
 import { PluginError } from '../../src/errors';
 import { DEFAULT_RULES } from '../../src/selection/types';
 import { schemeSourceKey } from '../../src/schemes/resources';
@@ -26,7 +26,7 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
   const modalDocument = () => [...endpoint.uiModals].at(-1)?.contentEl.ownerDocument ?? document;
   const button = (root: ParentNode, name: string) => {
     if (root === document) root = modalDocument();
-    const element = Array.from(root.querySelectorAll('button')).filter(item => item.textContent === name && !item.disabled).at(-1);
+    const element = Array.from(root.querySelectorAll<HTMLButtonElement>('button, [role="button"]')).filter(item => (item.textContent === name || item.getAttribute('aria-label') === name) && !item.disabled).at(-1);
     ok(element, `Missing button: ${name}`);
     let delivered = false;
     element.addEventListener('click', () => { delivered = true; }, { once: true });
@@ -41,7 +41,8 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
   };
   const wait = async (condition: () => boolean, label = 'UI condition') => {
     const start = performance.now();
-    while (!condition() && performance.now() - start < 10000) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    // Settings can cover the main window; animation frames then stop on desktop.
+    while (!condition() && performance.now() - start < 10000) await new Promise<void>(resolve => window.setTimeout(resolve, 25));
     ok(condition(), `${label} timed out: ${Array.from(modalDocument().querySelectorAll('.modal-content')).at(-1)?.textContent?.slice(-1400)}`);
   };
   async function mounted(run: (root: HTMLElement) => Promise<void>) {
@@ -71,11 +72,14 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       endpoint.syncSchemeCommands();
     }
   }
+  function rowAction(row: HTMLElement, name: string) {
+    const more = row.querySelector<HTMLElement>('[data-opencc-more]'); ok(more); more.click();
+    const item = Array.from(row.ownerDocument.querySelectorAll<HTMLElement>('.menu-item')).find(item => item.textContent === name);
+    ok(item, `Missing menu action: ${name}`); item.click();
+  }
   async function addPath(root: HTMLElement, name: string, path: string) {
     button(root, t('settings.addScheme'));
-    field(t('field.schemeName'), name); field(t('field.source'), 'vault'); field(t('field.location'), path);
-    button(document, t('action.preview'));
-    await wait(() => Array.from(modalDocument().querySelectorAll('button')).some(item => item.textContent === t('action.load')));
+    field(t('field.source'), 'vault'); field(t('field.schemeName'), name); field(t('field.location'), path);
     button(document, t('action.load'));
     await wait(() => endpoint.store.getDefinitions().some(item => item.name === name), 'Activate new UI scheme');
     const definition = endpoint.store.getDefinitions().find(item => item.name === name)!;
@@ -104,13 +108,65 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
     { name: 'settings/official-presets', run: async () => {
       await mounted(async root => {
         button(root, t('settings.addScheme'));
-        const presetButtons = Array.from(modalDocument().querySelectorAll<HTMLButtonElement>('[data-opencc-preset]'));
-        equal(presetButtons.map(item => item.dataset.openccPreset).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t');
-        const s2t = presetButtons[0]; ok(s2t); s2t.click();
+        const presets = modalDocument().querySelector<HTMLSelectElement>('[data-opencc-presets]'); ok(presets);
+        equal(Array.from(presets.options).map(item => item.value).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t');
+        button(document, t('official.add'));
         const location = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/config/s2t.json';
-        await wait(() => endpoint.store.getDrafts().some(item => item.source.location === location), 'Create official preset draft');
-        const draft = endpoint.store.getDrafts().find(item => item.source.location === location); ok(draft);
-        equal(draft.name, 's2t'); equal(draft.source.kind, 'url');
+        await wait(() => [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].some(item => item.source.location === location), 'Create official preset');
+        const draft = [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].find(item => item.source.location === location); ok(draft);
+        equal(draft.name, t('official.s2t')); equal(draft.source.kind, 'url');
+      });
+    } },
+    { name: 'settings/custom-save-and-first-default', run: async () => {
+      await mounted(async root => {
+        const first = endpoint.store.getDefinitions().length === 0;
+        const previousDefault = endpoint.store.getDefaultId();
+        const autoName = `Auto-${crypto.randomUUID()}`;
+        const file = await plugin.app.vault.create(`__opencc_tests__/${autoName}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
+        button(root, t('settings.addScheme')); field(t('field.source'), 'vault'); field(t('field.location'), file.path);
+        button(document, t('action.load'));
+        await wait(() => endpoint.store.getDefinitions().some(item => item.source.location === file.path), 'One-step save with inferred name');
+        const definition = endpoint.store.getDefinitions().find(item => item.source.location === file.path)!;
+        equal(definition.name, autoName);
+        if (first) await wait(() => endpoint.store.getDefaultId() === definition.id, 'First scheme becomes default');
+        else equal(endpoint.store.getDefaultId(), previousDefault);
+        const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row);
+        ok(!row.textContent?.includes(file.path), 'Source path should not crowd the scheme row');
+        ok(!row.textContent?.includes(t('length.none')), 'No empty audit report in the scheme list');
+        ok(!row.querySelector('.setting-item'), 'No settings nested inside a scheme row');
+        await plugin.app.vault.delete(file);
+      });
+    } },
+    { name: 'settings/advanced-review-and-validation', run: async () => {
+      await mounted(async root => {
+        const { definition } = await add(root, `Advanced ${crypto.randomUUID()}`, { 软件: '軟體' });
+        const modal = new SchemeEditModal(endpoint, definition); modal.open();
+        const advanced = modal.contentEl.querySelector('details'); ok(advanced); advanced.open = true;
+        field(t('field.fileMapping'), '{bad json'); button(document, t('action.load'));
+        await wait(() => !!modal.contentEl.querySelector('.is-invalid'), 'Inline mapping error');
+        equal(endpoint.store.getDefinitions().find(item => item.id === definition.id)?.name, definition.name);
+        field(t('field.fileMapping'), '{}'); field(t('field.schemeName'), 'Reviewed name');
+        button(document, t('action.preview'));
+        await wait(() => !!modal.contentEl.querySelector('[data-opencc-review]'), 'Optional source preview');
+        equal(endpoint.store.getDefinitions().find(item => item.id === definition.id)?.name, definition.name);
+        button(document, t('action.back'));
+        const nameInput = modal.contentEl.querySelector<HTMLInputElement>(`[aria-label="${t('field.schemeName')}"]`); ok(nameInput);
+        equal(nameInput.value, 'Reviewed name'); ok(!nameInput.disabled);
+        modal.contentEl.querySelector('form')?.requestSubmit();
+        await wait(() => endpoint.store.getDefinitions().some(item => item.id === definition.id && item.name === 'Reviewed name'), 'Keyboard form submission');
+      });
+    } },
+    { name: 'settings/save-edits-together', run: async () => {
+      await mounted(async root => {
+        const { definition } = await add(root, `Edit ${crypto.randomUUID()}`, { 软件: '軟體' });
+        const replacement = await plugin.app.vault.create(`__opencc_tests__/replacement-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟件' } } }] }));
+        const before = endpoint.store.getStatus(definition.id).snapshotId;
+        const modal = new SchemeEditModal(endpoint, definition); modal.open();
+        field(t('field.schemeName'), 'Changed name'); field(t('field.location'), replacement.path);
+        button(document, t('action.load'));
+        await wait(() => endpoint.store.getDefinitions().some(item => item.id === definition.id && item.name === 'Changed name'), 'Save all edits');
+        equal(endpoint.store.getDefinitions().find(item => item.id === definition.id)?.source.location, replacement.path);
+        ok(endpoint.store.getStatus(definition.id).snapshotId !== before, 'Changed source must load a new snapshot');
       });
     } },
     { name: 'settings/crud-default', run: async () => {
@@ -120,7 +176,7 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         field(t('settings.default'), definition.id);
         await wait(() => endpoint.store.getDefaultId() === definition.id);
         const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`);
-        ok(row); button(row, t('action.delete'));
+        ok(row); rowAction(row, t('action.delete'));
         button(document, t('delete.confirm'));
         await wait(() => !endpoint.store.getDefinitions().some(item => item.id === definition.id));
         equal(endpoint.store.getDefaultId(), null);
@@ -129,14 +185,17 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
     { name: 'settings/rename-command-id', run: async () => {
       await mounted(async root => {
         const originalName = `Rename ${crypto.randomUUID()}`;
-        const { definition } = await add(root, originalName, { 软件: '軟體' });
+        const { definition, file } = await add(root, originalName, { 软件: '軟體' });
+        const snapshotId = endpoint.store.getStatus(definition.id).snapshotId;
+        await plugin.app.vault.delete(file); // Renaming must work offline, without re-reading the config.
         const before = endpoint.schemeCommands.get(definition.id);
         ok(before); ok(before.id.endsWith(`:convert:${definition.id}`));
         const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('action.edit'));
-        field(t('field.schemeName'), `${originalName} 新名`); button(document, t('action.rename'));
+        field(t('field.schemeName'), `${originalName} 新名`); button(document, t('action.load'));
         await wait(() => endpoint.store.getDefinitions().some(item => item.id === definition.id && item.name.endsWith('新名')), 'Rename scheme');
         const after = endpoint.schemeCommands.get(definition.id); ok(after);
         equal(after.id, before.id); ok(after.name.includes('新名'));
+        equal(endpoint.store.getStatus(definition.id).snapshotId, snapshotId);
       });
     } },
     { name: 'settings/independent-command', run: async () => {
@@ -182,12 +241,12 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       const before = (await requestUrl(`${fixtureOrigin}/requests`)).json.length;
       await mounted(async root => {
         button(root, t('settings.addScheme'));
-        field(t('field.schemeName'), `HTTP ${crypto.randomUUID()}`); field(t('field.source'), 'url'); field(t('field.location'), `${fixtureOrigin}/config.json`);
-        button(document, t('action.preview'));
+        field(t('field.source'), 'url'); field(t('field.schemeName'), `HTTP ${crypto.randomUUID()}`); field(t('field.location'), `${fixtureOrigin}/config.json`);
+        button(document, t('action.load'));
         await wait(() => modalDocument().body.textContent?.includes(t('http.allow')) ?? false);
         equal((await requestUrl(`${fixtureOrigin}/requests`)).json.length, before);
         button(document, t('http.allow'));
-        await wait(() => Array.from(modalDocument().querySelectorAll('button')).some(item => item.textContent === t('action.load')));
+        await wait(() => !!modalDocument().querySelector('[data-opencc-review]'));
         equal((await requestUrl(`${fixtureOrigin}/requests`)).json.length, before + 1);
         button(document, t('action.close')); // Real cancel control: no dictionary request.
       });
@@ -197,13 +256,13 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const name = `Cancel ${crypto.randomUUID()}`;
         const file = await plugin.app.vault.create(`__opencc_tests__/settings-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
-        button(root, t('settings.addScheme')); field(t('field.schemeName'), name); field(t('field.source'), 'vault'); field(t('field.location'), file.path); button(document, t('action.preview'));
-        await wait(() => Array.from(modalDocument().querySelectorAll('button')).some(item => item.textContent === t('action.load') && !item.disabled), 'Cancellation preview');
+        button(root, t('settings.addScheme')); field(t('field.source'), 'vault'); field(t('field.schemeName'), name); field(t('field.location'), file.path);
         const original = endpoint.engine.validate;
         let resume!: () => void; const gate = new Promise<void>(resolve => { resume = resolve; });
         endpoint.engine.validate = async (snapshot, signal) => { await gate; return original.call(endpoint.engine, snapshot, signal); };
         try {
           button(document, t('action.load'));
+          await wait(() => endpoint.store.getDrafts().some(item => item.name === name), 'Save draft before loading');
           const draft = endpoint.store.getDrafts().find(item => item.name === name); ok(draft);
           await wait(() => endpoint.store.getStatus(draft.id).kind === 'loading', 'Loading status');
           [...endpoint.uiModals].at(-1)?.close(); resume();
@@ -216,17 +275,18 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const { definition, file } = await add(root, `Refresh ${crypto.randomUUID()}`, { 软件: '軟體字' });
         const firstSnapshot = endpoint.store.getStatus(definition.id).snapshotId; ok(firstSnapshot);
-        let row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('length.check'));
-        await wait(() => row?.textContent?.includes(t('length.risk')) ?? false, 'Initial audit');
+        let row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); rowAction(row, t('length.check'));
+        await wait(() => modalDocument().body.textContent?.includes(t('length.risk')) ?? false, 'Initial audit');
+        [...endpoint.uiModals].at(-1)?.close();
         await plugin.app.vault.modify(file, '{ invalid');
-        button(row, t('action.refresh'));
+        rowAction(row, t('action.refresh'));
         await wait(() => endpoint.store.getStatus(definition.id).kind === 'stale', 'Failed refresh fallback');
         await wait(() => root.textContent?.includes(t('status.stale')) ?? false, 'Render stale status');
         equal((await endpoint.store.getActive(definition.id)).id, firstSnapshot);
         for (const modal of [...endpoint.uiModals]) modal.close();
         await plugin.app.vault.modify(file, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
-        row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('action.refresh'));
-        await wait(() => Array.from(modalDocument().querySelectorAll('button')).some(item => item.textContent === t('action.load') && !item.disabled), 'Refresh preview');
+        row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); rowAction(row, t('action.refresh'));
+        await wait(() => !!modalDocument().querySelector('[data-opencc-review]'), 'Refresh preview');
         button(document, t('action.load'));
         await wait(() => endpoint.store.getStatus(definition.id).snapshotId !== firstSnapshot, 'Publish refreshed snapshot');
         await wait(() => root.textContent?.includes(t('length.expired')) ?? false, 'Expire old audit');
@@ -254,9 +314,9 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await endpoint.store.activate(definition, prepared);
       try {
         await mounted(async root => {
-          const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); button(row, t('length.check'));
-          await wait(() => row.textContent?.includes(t('length.incomplete')) ?? false, 'Incomplete audit badge');
-          ok(row.textContent?.includes(prepared.id));
+          const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`); ok(row); rowAction(row, t('length.check'));
+          await wait(() => modalDocument().body.textContent?.includes(t('length.incomplete')) ?? false, 'Incomplete audit badge');
+          ok(modalDocument().body.textContent?.includes(prepared.id));
         });
       } finally { await endpoint.store.remove(definition.id); endpoint.lengthReports.delete(definition.id); endpoint.syncSchemeCommands(); }
     } },
@@ -264,10 +324,9 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         const { definition } = await add(root, `Risk ${crypto.randomUUID()}`, { 软件: '軟體字' });
         const row = root.querySelector<HTMLElement>(`[data-scheme-id="${definition.id}"]`);
-        ok(row); button(row, t('length.check'));
-        try { await wait(() => row.textContent?.includes(t('length.risk')) ?? false); }
-        catch { throw new Error(`Length report UI: ${row.textContent}`); }
-        ok(row.textContent?.includes(endpoint.store.getStatus(definition.id).snapshotId ?? 'MISSING_SNAPSHOT'));
+        ok(row); rowAction(row, t('length.check'));
+        await wait(() => modalDocument().body.textContent?.includes(t('length.risk')) ?? false);
+        ok(modalDocument().body.textContent?.includes(endpoint.store.getStatus(definition.id).snapshotId ?? 'MISSING_SNAPSHOT'));
       });
     } },
   ];

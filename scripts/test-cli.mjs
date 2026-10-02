@@ -69,9 +69,9 @@ async function runProduction(pluginId) {
     let uiDoc=document;
     const labels={
       add:['Add scheme','添加方案'], name:['Scheme name','方案名称'], source:['Config source','配置来源'],
-      location:['Config location','配置位置'], preview:['Preview dependencies','预览依赖'],
-      load:['Confirm and load','确认并加载'], default:['Default scheme','默认方案'],
-      title:['Add OpenCC scheme','添加 OpenCC 方案']
+      location:['Config location','配置位置'],
+      load:['Save','保存'], default:['Default scheme','默认方案'],
+      title:['Add scheme','添加方案']
     };
     const matches=(key,text)=>labels[key].includes(text);
     const button=key=>{const el=[...uiDoc.querySelectorAll('button')].filter(x=>matches(key,x.textContent)&&!x.disabled).at(-1);if(!el)throw new Error('Missing button: '+key);el.click()};
@@ -85,8 +85,7 @@ async function runProduction(pluginId) {
     app.setting.open();await new Promise(r=>setTimeout(r,500));app.setting.openTabById(${JSON.stringify(pluginId)});
     await wait(()=>app.setting.activeTab?.id===${JSON.stringify(pluginId)},'settings tab');uiDoc=app.setting.tabContentContainer.ownerDocument;
     await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>matches('add',x.textContent)),'settings');
-    button('add');field('name',${JSON.stringify(name)});field('source','vault');field('location',${JSON.stringify(configPath)});button('preview');
-    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>matches('load',x.textContent)&&!x.disabled),'preview');button('load');
+    button('add');field('source','vault');field('name',${JSON.stringify(name)});field('location',${JSON.stringify(configPath)});button('load');
     await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'activation');
     const select=[...app.setting.tabContentContainer.querySelectorAll('select[aria-label]')].find(x=>matches('default',x.getAttribute('aria-label')));const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(name)}));if(!option)throw new Error('Missing default option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
     await new Promise(r=>setTimeout(r,300));app.setting.close();
@@ -129,7 +128,7 @@ async function main() {
   // Reloads within this invocation retain it, so restart/offline recovery tests remain real.
   const cacheDir = path.join(pluginDir, 'cache');
   if (await exists(cacheDir)) { await ensureInside(vault, cacheDir); await rm(cacheDir, { recursive: true, force: true }); }
-  for (const name of ['main.js', 'manifest.json', 'versions.json']) {
+  for (const name of ['main.js', 'manifest.json', 'versions.json', 'styles.css']) {
     const destination = path.join(pluginDir, name);
     if (await exists(destination)) await ensureInside(vault, destination);
     await copyFile(path.join(root, 'dist', name), destination);

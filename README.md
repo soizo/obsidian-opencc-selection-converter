@@ -12,7 +12,7 @@ There is currently no public community-store release. Build the plugin, then cop
 npm ci
 npm run build
 
-Copy dist/main.js, dist/manifest.json and dist/versions.json to:
+Copy dist/main.js, dist/manifest.json, dist/versions.json and dist/styles.css to:
 <Vault>/.obsidian/plugins/opencc-selection-converter/
 ```
 
@@ -24,14 +24,14 @@ To rebuild the native assets after changing the engine, run `npm run build:engin
 
 ```text
 1. Open Settings → OpenCC Selection Converter → Add scheme.
-2. Add an official OpenCC preset in one click, or enter a custom scheme name and choose a vault JSON configuration or configuration URL.
-3. For custom schemes, preview the configuration’s dictionary dependencies; review and explicitly approve HTTP resources when prompted.
-4. Select text in Source mode or Live Preview.
-5. Use Convert selection, a scheme command, or the context menu.
-6. Undo once when needed to restore the complete conversion.
+2. Pick an official preset and click Add. For a custom scheme, choose a vault file or enter a config URL, then Save. The name is optional; the first scheme becomes the default.
+3. Select text in Source mode or Live Preview and use Convert selection, a scheme command, or the context menu.
+4. Undo once when needed to restore the complete conversion.
 ```
 
 Each active scheme has its own stable command, which can be assigned a separate shortcut in Obsidian’s **Hotkeys** settings. No selection means no conversion of the whole note.
+
+Use **Edit → Save** for changes; renaming alone works offline. Each scheme’s **More options** menu contains Refresh, Check lengths and Delete. Custom schemes keep dependency overrides and a source preview under **Advanced**. Warnings and unapproved HTTP resources still require review before loading; cancelling leaves the active scheme unchanged.
 
 ## Schemes and cache
 
