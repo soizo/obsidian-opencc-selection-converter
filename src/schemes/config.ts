@@ -47,11 +47,11 @@ export function parseConfig(text: string): ParsedConfig {
   function decode(node: Node, path: Path, depth: number): ConfigValue {
     if (depth > LIMITS.configDepth) invalid('配置嵌套超过上限。', path, 'CONFIG_LIMIT');
     if (node.type === 'object') {
-      const result: Record<string, ConfigValue> = Object.create(null);
+      const result = Object.create(null) as Record<string, ConfigValue>;
       for (const property of node.children ?? []) {
         const [keyNode, valueNode] = property.children ?? [];
         if (!keyNode || !valueNode || typeof keyNode.value !== 'string') invalid('配置对象无效。', path);
-        const key = keyNode.value as string;
+        const key = keyNode.value;
         validText(key, [...path, key]);
         if (Object.hasOwn(result, key)) invalid('配置字段重复。', [...path, key]);
         result[key] = decode(valueNode, [...path, key], depth + 1);
@@ -119,7 +119,7 @@ export function parseConfig(text: string): ParsedConfig {
 
 function urlLocation(value: string, path: Path, base?: string): string {
   validText(value, path);
-  if (value !== value.trim() || /[\\\u0000-\u001f\u007f]/u.test(value)) invalid('资源 URL 无效。', path, 'INVALID_RESOURCE_PATH');
+  if (value !== value.trim() || value.includes('\\') || Array.from(value).some(character => character.charCodeAt(0) <= 0x1f || character.charCodeAt(0) === 0x7f)) invalid('资源 URL 无效。', path, 'INVALID_RESOURCE_PATH');
   let url: URL;
   try { url = base ? new URL(value, base) : new URL(value); }
   catch { invalid('资源 URL 无效。', path, 'INVALID_RESOURCE_PATH'); }

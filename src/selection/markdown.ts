@@ -14,7 +14,9 @@ export function projectMarkdown(state: EditorState, selection: Span, rules: Rule
   const text = state.doc.toString();
   if (!Number.isInteger(selection.from) || !Number.isInteger(selection.to) || selection.from < 0 || selection.to > text.length || selection.from >= selection.to) throw new PluginError('INVALID_SELECTION', '选区范围无效。');
   let scalarCount = 0;
-  for (const _ of text.slice(selection.from, selection.to)) if (++scalarCount > LIMITS.selectionScalars) throw new PluginError('SELECTION_LIMIT', '选区超过字符数量上限。');
+  for (let offset = selection.from; offset < selection.to; offset += text.codePointAt(offset)! > 0xffff ? 2 : 1) {
+    if (++scalarCount > LIMITS.selectionScalars) throw new PluginError('SELECTION_LIMIT', '选区超过字符数量上限。');
+  }
   for (const offset of [selection.from, selection.to]) {
     if (offset > 0 && offset < text.length && /[\uD800-\uDBFF]/.test(text[offset - 1]!) && /[\uDC00-\uDFFF]/.test(text[offset]!)) throw new PluginError('INVALID_SELECTION', '选区切中了 Unicode 字符。');
   }
@@ -144,7 +146,7 @@ export function projectMarkdown(state: EditorState, selection: Span, rules: Rule
     if (!tokens.some(token => token.from <= match.index && match.index < token.to && (token.tags.includes('link') || token.tags.includes('hmd-internal-link')))) mark({ from: match.index, to: match.index + match[0].length }, 2);
   }
   for (const block of blocks) if (block.tags.includes('HyperMD-footnote') && /^\s*\[(?!\^)/.test(text.slice(block.from, block.to))) mark(block, 2);
-  for (const block of blocks) if (block.tags.includes('HyperMD-table-row') && /^\s*\|?[\s:|\-]+\|?\s*$/.test(text.slice(block.from, block.to))) mark(block, 2);
+  for (const block of blocks) if (block.tags.includes('HyperMD-table-row') && /^\s*\|?[\s:|-]+\|?\s*$/.test(text.slice(block.from, block.to))) mark(block, 2);
   const runs: Projection['runs'] = [];
   let units: VisibleUnit[] = [];
   let previousChain = '';

@@ -214,6 +214,6 @@ export class SchemePicker extends FuzzySuggestModal<SchemeDefinition> {
   getItems(): SchemeDefinition[] { return [...this.host.store.getDefinitions()]; }
   getItemText(item: SchemeDefinition): string { return `${item.name} — ${safeLocation(item.source.location)}`; }
   onChooseItem(item: SchemeDefinition): void { this.choose(item); }
-  onOpen(): void { super.onOpen(); this.host.uiModals.add(this); }
+  async onOpen(): Promise<void> { this.host.uiModals.add(this); await super.onOpen(); }
   onClose(): void { super.onClose(); this.host.uiModals.delete(this); }
 }

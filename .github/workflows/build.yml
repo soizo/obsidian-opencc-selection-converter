@@ -89,6 +89,7 @@ jobs:
       - name: Build and verify
         run: |
           npm run check
+          npm run test:build
           npm run build:engine
           npm run build
           node scripts/verify-artifact.mjs

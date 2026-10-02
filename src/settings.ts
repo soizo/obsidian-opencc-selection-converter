@@ -1,4 +1,4 @@
-import { Notice, PluginSettingTab, Setting, type App, type Plugin } from 'obsidian';
+import { Notice, PluginSettingTab, Setting, type App, type Plugin, type SettingDefinitionItem } from 'obsidian';
 import { SchemeEditModal, confirmAction, safeError, safeLocation, safeText, type SchemeHost } from './scheme-modal';
 import type { RegionKind } from './selection/types';
 import type { SchemeDefinition } from './schemes/model';
@@ -12,67 +12,77 @@ export class ConverterSettingsTab extends PluginSettingTab {
   private readonly checks = new Set<AbortController>();
   private readonly host: SchemeHost;
   constructor(app: App, plugin: Plugin) { super(app, plugin); this.host = plugin as SchemeHost; }
-  display(): void {
-    this.hide();
-    const { containerEl: root, host } = this;
-    root.empty(); root.createEl('h2', { text: t('settings.title') });
-    root.createEl('p', { text: t('settings.intro') });
-    const definitions = host.store.getDefinitions();
-    new Setting(root).setName(t('settings.default')).addDropdown(dropdown => {
-      dropdown.addOption('', t('settings.noDefault'));
-      for (const definition of definitions) dropdown.addOption(definition.id, `${definition.name} — ${safeLocation(definition.source.location)}`);
-      dropdown.setValue(host.store.getDefaultId() ?? ''); dropdown.selectEl.setAttribute('aria-label', t('settings.default'));
-      dropdown.onChange(async value => {
-        dropdown.setDisabled(true);
-        try { await host.store.setDefault(value || null); }
-        catch (error) { dropdown.setValue(host.store.getDefaultId() ?? ''); new Notice(safeError(error)); }
-        finally { dropdown.setDisabled(false); }
-      });
-    });
-    new Setting(root).setName(t('settings.schemes')).addButton(button => button.setButtonText(t('settings.addScheme')).setCta().onClick(() => new SchemeEditModal(host, undefined, () => this.display()).open()));
-    const drafts = host.store.getDrafts().filter(draft => !definitions.some(definition => definition.id === draft.id));
-    if (!definitions.length && !drafts.length) root.createEl('p', { text: t('settings.noSchemes') });
-    for (const definition of [...definitions, ...drafts]) this.row(definition, definitions.some(item => item.id === definition.id));
-    root.createEl('h3', { text: t('settings.regionRules') });
-    root.createEl('p', { text: t('settings.regionHelp') });
-    const rules = host.store.getRules();
-    for (const kind of Object.keys(regionNames) as RegionKind[]) {
-      new Setting(root).setName(t(regionNames[kind])).addDropdown(dropdown => {
-        dropdown.addOptions({ always: t('policy.always'), inside: t('policy.inside'), never: t('policy.never') }).setValue(rules.regions[kind]);
-        dropdown.selectEl.setAttribute('aria-label', t(regionNames[kind]));
-        dropdown.onChange(async value => {
-          rules.regions[kind] = value as 'always' | 'inside' | 'never';
-          try { await host.store.saveRules(rules); } catch (error) { new Notice(safeError(error)); this.display(); }
-        });
-      });
-    }
-    new Setting(root).setName(t('settings.force')).setDesc(t('settings.forceDesc')).addToggle(toggle => {
-      toggle.setValue(rules.force); toggle.toggleEl.setAttribute('aria-label', t('settings.force'));
-      toggle.onChange(async value => {
-        toggle.setDisabled(true);
-        try {
-          if (value && !await confirmAction(host, t('settings.forceTitle'), t('settings.forceWarning'), t('settings.enableForce'))) { toggle.setValue(false); return; }
-          rules.force = value; await host.store.saveRules(rules);
-        } catch (error) { toggle.setValue(host.store.getRules().force); new Notice(safeError(error)); }
-        finally { toggle.setDisabled(false); }
-      });
-    });
-  }
-  private row(definition: SchemeDefinition, active: boolean): void {
+  getSettingDefinitions(): SettingDefinitionItem[] {
     const { host } = this;
-    const row = this.containerEl.createDiv({ attr: { 'data-scheme-id': definition.id } });
+    const definitions = host.store.getDefinitions();
+    const drafts = host.store.getDrafts().filter(draft => !definitions.some(definition => definition.id === draft.id));
+    const rules = host.store.getRules();
+    return [
+      { name: t('settings.title'), desc: t('settings.intro'), searchable: false, render: setting => { setting.setHeading(); } },
+      { name: t('settings.default'), render: setting => {
+        setting.addDropdown(dropdown => {
+          dropdown.addOption('', t('settings.noDefault'));
+          for (const definition of definitions) dropdown.addOption(definition.id, `${definition.name} — ${safeLocation(definition.source.location)}`);
+          dropdown.setValue(host.store.getDefaultId() ?? ''); dropdown.selectEl.setAttribute('aria-label', t('settings.default'));
+          dropdown.onChange(async value => {
+            dropdown.setDisabled(true);
+            try { await host.store.setDefault(value || null); }
+            catch (error) { dropdown.setValue(host.store.getDefaultId() ?? ''); new Notice(safeError(error)); }
+            finally { dropdown.setDisabled(false); }
+          });
+        });
+      } },
+      { name: t('settings.schemes'), desc: !definitions.length && !drafts.length ? t('settings.noSchemes') : undefined,
+        render: setting => { setting.addButton(button => button.setButtonText(t('settings.addScheme')).setCta().onClick(() => new SchemeEditModal(host, undefined, () => this.update()).open())); } },
+      ...[...definitions, ...drafts].map((definition): SettingDefinitionItem => ({
+        type: 'group', items: [{ name: definition.name, desc: safeLocation(definition.source.location),
+          render: setting => this.row(definition, definitions.some(item => item.id === definition.id), setting) }],
+      })),
+      { name: t('settings.regionRules'), desc: t('settings.regionHelp'), searchable: false, render: setting => { setting.setHeading(); } },
+      ...(Object.keys(regionNames) as RegionKind[]).map((kind): SettingDefinitionItem => ({
+        name: t(regionNames[kind]), render: setting => {
+          setting.addDropdown(dropdown => {
+            dropdown.addOptions({ always: t('policy.always'), inside: t('policy.inside'), never: t('policy.never') }).setValue(rules.regions[kind]);
+            dropdown.selectEl.setAttribute('aria-label', t(regionNames[kind]));
+            dropdown.onChange(async value => {
+              rules.regions[kind] = value as 'always' | 'inside' | 'never';
+              try { await host.store.saveRules(rules); } catch (error) { new Notice(safeError(error)); this.update(); }
+            });
+          });
+        },
+      })),
+      { name: t('settings.force'), desc: t('settings.forceDesc'), render: setting => {
+        setting.addToggle(toggle => {
+          toggle.setValue(rules.force); toggle.toggleEl.setAttribute('aria-label', t('settings.force'));
+          toggle.onChange(async value => {
+            toggle.setDisabled(true);
+            try {
+              if (value && !await confirmAction(host, t('settings.forceTitle'), t('settings.forceWarning'), t('settings.enableForce'))) { toggle.setValue(false); return; }
+              rules.force = value; await host.store.saveRules(rules);
+            } catch (error) { toggle.setValue(host.store.getRules().force); new Notice(safeError(error)); }
+            finally { toggle.setDisabled(false); }
+          });
+        });
+      } },
+    ];
+  }
+  private row(definition: SchemeDefinition, active: boolean, setting: Setting): () => void {
+    const { host } = this;
+    // The declarative renderer owns group children; custom content belongs to this setting.
+    const row = setting.infoEl;
+    row.setAttribute('data-scheme-id', definition.id);
     const status = host.store.getStatus(definition.id);
     const labels = { unloaded: active ? t('status.cached') : t('status.unloaded'), loading: t('status.loading'), ready: t('status.ready'), dirty: t('status.dirty'), stale: t('status.stale'), unavailable: t('status.unavailable') };
-    new Setting(row).setName(definition.name).setDesc(`${safeLocation(definition.source.location)} · ${labels[status.kind]}`);
+    setting.setDesc(`${safeLocation(definition.source.location)} · ${labels[status.kind]}`);
     if (status.error) row.createEl('p', { text: safeError(status.error) });
     for (const warning of status.warnings) row.createEl('p', { text: safeText(warning) });
-    new Setting(row).addButton(button => button.setButtonText(t('action.edit')).onClick(() => new SchemeEditModal(host, definition, () => this.display()).open()))
-      .addButton(button => button.setButtonText(t('action.refresh')).onClick(() => new SchemeEditModal(host, definition, () => this.display()).openPreview()))
+    new Setting(row).addButton(button => button.setButtonText(t('action.edit')).onClick(() => new SchemeEditModal(host, definition, () => this.update()).open()))
+      .addButton(button => button.setButtonText(t('action.refresh')).onClick(() => new SchemeEditModal(host, definition, () => this.update()).openPreview()))
       .addButton(button => button.setButtonText(t('action.delete')).onClick(async () => {
         button.setDisabled(true);
         try {
           if (!await confirmAction(host, t('delete.title'), t('delete.description', { name: definition.name }), t('delete.confirm'))) return;
-          await host.store.remove(definition.id); host.lengthReports.delete(definition.id); host.syncSchemeCommands(); this.display();
+          await host.store.remove(definition.id); host.lengthReports.delete(definition.id); host.syncSchemeCommands(); this.update();
         } catch (error) { new Notice(safeError(error)); }
         finally { button.setDisabled(false); }
       }));
@@ -102,6 +112,7 @@ export class ConverterSettingsTab extends PluginSettingTab {
       } catch (error) { if (!running.signal.aborted) reportEl.setText(safeError(error)); }
       finally { this.checks.delete(running); controller = undefined; button.setDisabled(false); }
     })).addButton(button => button.setButtonText(t('length.cancel')).onClick(() => { controller?.abort(); reportEl.setText(t('length.cancelled')); }));
+    return () => { if (controller) { controller.abort(); this.checks.delete(controller); } };
   }
   hide(): void { for (const controller of this.checks) controller.abort(); this.checks.clear(); }
 }

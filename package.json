@@ -2,12 +2,14 @@
   "name": "opencc-selection-converter",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:engine": "bash scripts/build-engine.sh",
     "build:test": "node scripts/build.mjs --test",
     "check": "tsc --noEmit",
+    "test:build": "node tests/build-clean.mjs",
     "test": "node scripts/test-cli.mjs all",
     "test:cli": "node scripts/test-cli.mjs"
   },

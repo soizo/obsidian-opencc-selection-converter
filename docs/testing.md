@@ -30,12 +30,13 @@ npm test
 
 ```text
 npm ci
-npm run build:engine
+npm run test:build
 npm run build
-node scripts/verify-artifact.mjs
 ```
 
-`build:engine` 只使用 `engine/upstream.lock.json` 固定的本地 OpenCC 与 emsdk checkout。`build` 生成：
+`test:build` 将 Git 跟踪及未忽略的新文件复制到临时目录，重新运行 `npm ci` 和 `npm run build`，不复制本地依赖、`build/` 或 SDK；它验证普通构建不依赖本地原生产物，也不生成动态代码导入。
+
+`build` 静态打包随仓库保存的 `engine/generated/opencc.mjs` 和 `opencc.wasm`，生成：
 
 ```text
 dist/main.js
@@ -43,7 +44,9 @@ dist/manifest.json
 dist/versions.json
 ```
 
-`verify-artifact.mjs` 检查正式包不含测试入口、测试词典或 Node 运行时依赖，包含完整第三方许可，包含所需原生 ABI，并保持 WASM 32 MiB 初始 / 256 MiB 最大内存。
+修改原生源码后，使用 `engine/upstream.lock.json` 固定的本地 OpenCC 与 emsdk checkout 执行 `npm run build:engine`，更新并一同提交 `engine/generated/` 中的两个生成资产，然后执行 `npm run build`。安装了固定版 SDK 的开发环境还应运行 `node scripts/verify-artifact.mjs`。
+
+`verify-artifact.mjs` 检查正式包不含测试入口、测试词典或 Node 运行时依赖，包含项目 MIT 及完整第三方许可，包含所需原生 ABI，并保持 WASM 32 MiB 初始 / 256 MiB 最大内存。
 
 ## 正式包验收
 

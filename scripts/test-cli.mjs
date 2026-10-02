@@ -67,8 +67,15 @@ async function runProduction(pluginId) {
   const result = await evaluate(`(async()=>{
     const wait=async(test,label)=>{const end=Date.now()+20000;while(!test()&&Date.now()<end)await new Promise(r=>setTimeout(r,50));if(!test())throw new Error(label)};
     let uiDoc=document;
-    const button=name=>{const el=[...uiDoc.querySelectorAll('button')].filter(x=>x.textContent===name&&!x.disabled).at(-1);if(!el)throw new Error('Missing button: '+name);el.click()};
-    const field=(label,value)=>{const el=[...uiDoc.querySelectorAll('[aria-label="'+label+'"]')].at(-1);if(!el)throw new Error('Missing field: '+label);el.value=value;el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}))};
+    const labels={
+      add:['Add scheme','添加方案'], name:['Scheme name','方案名称'], source:['Config source','配置来源'],
+      location:['Config location','配置位置'], preview:['Preview dependencies','预览依赖'],
+      load:['Confirm and load','确认并加载'], default:['Default scheme','默认方案'],
+      title:['Add OpenCC scheme','添加 OpenCC 方案']
+    };
+    const matches=(key,text)=>labels[key].includes(text);
+    const button=key=>{const el=[...uiDoc.querySelectorAll('button')].filter(x=>matches(key,x.textContent)&&!x.disabled).at(-1);if(!el)throw new Error('Missing button: '+key);el.click()};
+    const field=(key,value)=>{const el=[...uiDoc.querySelectorAll('[aria-label]')].filter(x=>matches(key,x.getAttribute('aria-label'))).at(-1);if(!el)throw new Error('Missing field: '+key);el.value=value;el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}))};
     const p=app.plugins.plugins[${JSON.stringify(pluginId)}];
     if(!p||p.runCliSuite!==undefined)throw new Error('Not a production plugin');
     let folder=app.vault.getAbstractFileByPath(${JSON.stringify(folder)});if(!folder)await app.vault.createFolder(${JSON.stringify(folder)});
@@ -77,11 +84,11 @@ async function runProduction(pluginId) {
     let note=app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});note?await app.vault.modify(note,'前软件后'):note=await app.vault.create(${JSON.stringify(notePath)},'前软件后');
     app.setting.open();await new Promise(r=>setTimeout(r,500));app.setting.openTabById(${JSON.stringify(pluginId)});
     await wait(()=>app.setting.activeTab?.id===${JSON.stringify(pluginId)},'settings tab');uiDoc=app.setting.tabContentContainer.ownerDocument;
-    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>x.textContent==='添加方案'),'settings');
-    button('添加方案');field('方案名称',${JSON.stringify(name)});field('配置来源','vault');field('配置位置',${JSON.stringify(configPath)});button('预览依赖');
-    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>x.textContent==='确认并加载'&&!x.disabled),'preview');button('确认并加载');
-    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>x.textContent?.includes('添加 OpenCC')),'activation');
-    const select=app.setting.tabContentContainer.querySelector('[aria-label="默认方案"]');const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(name)}));if(!option)throw new Error('Missing default option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
+    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>matches('add',x.textContent)),'settings');
+    button('add');field('name',${JSON.stringify(name)});field('source','vault');field('location',${JSON.stringify(configPath)});button('preview');
+    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>matches('load',x.textContent)&&!x.disabled),'preview');button('load');
+    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'activation');
+    const select=[...app.setting.tabContentContainer.querySelectorAll('select[aria-label]')].find(x=>matches('default',x.getAttribute('aria-label')));const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(name)}));if(!option)throw new Error('Missing default option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
     await new Promise(r=>setTimeout(r,300));app.setting.close();
     const leaf=app.workspace.getLeaf(false);await leaf.openFile(note,{state:{mode:'source',source:true}});const view=leaf.view;await view.setState({...view.getState(),mode:'source',source:true},{history:false});
     await wait(()=>view.editor.getValue()==='前软件后','note open');view.editor.setSelection({line:0,ch:1},{line:0,ch:3});await app.commands.executeCommandById(${JSON.stringify(`${pluginId}:convert-default`)});await wait(()=>view.editor.getValue()==='前軟體后','conversion');view.editor.undo();await wait(()=>view.editor.getValue()==='前软件后','undo');

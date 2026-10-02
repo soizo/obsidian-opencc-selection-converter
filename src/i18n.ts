@@ -1,3 +1,4 @@
+import { getLanguage } from 'obsidian';
 import { enGB, enGBErrors, type MessageKey } from './locales/en-GB';
 import { zhHans, zhHansErrors } from './locales/zh-Hans';
 
@@ -8,7 +9,7 @@ export function localeFor(language: string): Locale {
 }
 
 function currentLocale(): Locale {
-  return localeFor(localStorage.getItem('language') ?? document.documentElement.lang);
+  return localeFor(getLanguage());
 }
 
 export function t(key: MessageKey, values: Record<string, string | number> = {}): string {

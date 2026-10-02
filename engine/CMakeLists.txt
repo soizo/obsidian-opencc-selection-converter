@@ -20,7 +20,7 @@ target_include_directories(opencc_selection_engine PRIVATE
 target_link_libraries(opencc_selection_engine PRIVATE OpenCC::OpenCC)
 set_target_properties(opencc_selection_engine PROPERTIES
   OUTPUT_NAME opencc SUFFIX .mjs
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../build/engine")
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/generated")
 target_link_options(opencc_selection_engine PRIVATE
   --no-entry -fexceptions
   "-sDISABLE_EXCEPTION_CATCHING=0"

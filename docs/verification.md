@@ -125,9 +125,22 @@
 
 - 正式构建安装到专用 vault 后确认没有 `runCliSuite` 测试入口。通过真实 Obsidian 设置窗口添加库内 inline OpenCC 方案、设为默认、在真实 Markdown 编辑器执行正式 `convert-default` 命令，并用一次真实撤销恢复原文。结果：`production=true`、`testHook=false`、转换和撤销均通过。
 - 正式发布目录为 `dist/`：`main.js`、`manifest.json`、`versions.json`。最近一次正式产物检查为 **1,163,191 字节**；WASM 32/256 MiB，完整许可已嵌入，无测试夹具或 Node 运行时依赖。
-- 新增用户 README 与测试/发布文档，说明安装、URL/vault 依赖解析、缓存与隐私、区域规则、严格/force、数学白名单、已知限制、专用测试 vault 和真机边界。仓库没有公开远程、贡献流程或项目许可证，README 明确标记 **UNLICENSED**，不替第三方组件赋予许可。
+- 新增用户 README 与测试/发布文档，说明安装、URL/vault 依赖解析、缓存与隐私、区域规则、严格/force、数学白名单、已知限制、专用测试 vault 和真机边界。本阶段结束时仓库没有公开远程、贡献流程或项目许可证，README 标记 **UNLICENSED**；后续 MIT 授权见下方社区审核修复记录。
 - 既有完整桌面矩阵的最近新鲜证据为 **126 通过 / 0 失败**。第 11 阶段没有重复该矩阵；只新增并运行正式包端到端验收。
 - Obsidian 桌面应用与 installer 均为 **1.13.7**。两次 `dev:mobile on` 都在模拟环境重载后报告社区插件不存在；第二次显式 enable/reload 仍为 `plugin not found`。两次均通过 shell trap 恢复 `dev:mobile off`。因此没有移动模拟通过证据，也没有 Android/iOS 真机证据。
+
+## 社区审核修复：可重建资产与 Obsidian API
+
+- 红灯：不复制本地 `build/` 的源码构建复现缺失 `opencc.mjs`；设置搜索回归确认默认方案没有声明式定义；资源以 `undefined` 拒绝时，回归确认没有返回 `RESOURCE_READ`。
+- `engine/generated/` 保存固定版 loader、WASM 及 TypeScript 声明。普通构建静态打包，不再动态导入 Blob 代码，也不要求开发者先安装原生 SDK。固定工具链重新生成后，loader 和 WASM 的 SHA-256 均与原资产完全一致。
+- `npm run test:build` 在临时源码副本重新执行 `npm ci` 和 `npm run build`；没有复制本地依赖、SDK 或原生产物。构建通过，并确认正式包没有动态代码导入。
+- 设置页采用 `getSettingDefinitions()`、`update()` 和原生设置标题。自订方案控件渲染在当前设置项内，避免被声明式组协调器移除；行销毁与设置页关闭均取消正在运行的长度检查。
+- 计时器使用 `window`，语言检测使用 `getLanguage()`；Worker 使用其自身的 `self` 禁止网络，不访问不存在的 `window`。句柄泄漏错误在文件清理之后报告，不覆盖更早的转换错误。缓存 JSON 先收窄类型；保留无原型配置对象及原有 URL 控制字符拒绝规则。
+- 官方 `eslint-plugin-obsidianmd@0.4.2` 推荐规则对 `src/**/*.ts`、manifest 和 LICENSE 检查为 **0 错误 / 0 警告**；检查工具安装在临时目录，没有新增项目依赖。`npm run check` 和 `git diff --check` 通过；主动 LSP 无错误，但部分文件为 push-only 未确认，不把它算作完整无诊断证明。
+- 初次完整宿主回归为 **120 通过 / 9 失败**，失败集中在设置专项。除渲染容器错误外，真实设置 popout 暴露了测试驱动的单文档假设和关闭生命周期竞争。驱动改为跟踪实际弹窗文档、等待旧窗口 `pagehide`，没有添加任意延时或忽略断言。修复后设置专项 **14 通过 / 0 失败**。
+- 正式包工作流通过：没有测试入口，通过真实设置添加方案、设置默认项、执行转换并一次撤销恢复。产物核验为 **1,198,801 字节**，保留完整许可、无测试夹具/Node 运行时依赖，WASM 内存仍为 32/256 MiB。
+- 最终 `npm test && npm run build && node scripts/verify-artifact.mjs` 通过：完整宿主矩阵 **129 通过 / 0 失败**，包括关闭资源服务器后的真实插件重载与离线恢复。随后保留的 `dist/` 为正式包而非测试包。
+- 新增项目 MIT `LICENSE`，同步 package 元数据与 README，并将许可证嵌入正式包。OpenCC、Emscripten 及其他第三方组件继续使用各自许可证。
 
 ## 尚未验收
 

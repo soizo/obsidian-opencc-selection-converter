@@ -45,6 +45,19 @@ export function resourcesTests(plugin: TestPlugin, fixtureOrigin?: string) {
       const renamed = await loadPrepared(app, await prepareScheme(app, { ...definition, name: 'renamed' }, signal), engine(plugin), signal);
       equal(renamed.sourceKey, loaded.sourceKey);
     } },
+    { name: 'resources/non-error-rejection', run: async () => {
+      const app = plugin.app;
+      if (!app.vault.getAbstractFileByPath('__opencc_tests__')) await app.vault.createFolder('__opencc_tests__');
+      const file = await app.vault.create(`__opencc_tests__/rejection-${crypto.randomUUID()}.json`, '{"conversion_chain":[]}');
+      const original = app.vault.readBinary;
+      try {
+        app.vault.readBinary = async target => {
+          if (target === file) return Promise.reject(undefined);
+          return original.call(app.vault, target);
+        };
+        await rejectsCode(prepareScheme(app, { id: crypto.randomUUID(), name: 'rejection', source: { kind: 'vault', location: file.path } }, new AbortController().signal), 'RESOURCE_READ');
+      } finally { app.vault.readBinary = original; }
+    } },
     { name: 'resources/cancel-and-failure', run: async () => {
       const definition = remote();
       const cancelled = new AbortController();

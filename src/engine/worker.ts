@@ -1,7 +1,6 @@
 import type { EngineOutput, EngineReply, EngineRequest, LengthReport, MatchRecord, NativeModule, TraceResult } from './types';
 import { LIMITS } from '../limits';
-
-declare const __NATIVE_LOADER_SOURCE__: string;
+import createOpenCC from '../../engine/generated/opencc.mjs';
 declare const __WASM_BASE64__: string;
 
 let native: Promise<NativeModule> | undefined;
@@ -17,20 +16,15 @@ function decodeBase64(value: string): Uint8Array {
 
 async function module(): Promise<NativeModule> {
   if (!native) native = (async () => {
-    Object.defineProperty(globalThis, 'fetch', { value: () => { throw new Error('Network disabled in OpenCC Worker'); } });
-    Object.defineProperty(globalThis, 'XMLHttpRequest', { value: class { constructor() { throw new Error('Network disabled in OpenCC Worker'); } } });
-    Object.defineProperty(globalThis, 'WebSocket', { value: class { constructor() { throw new Error('Network disabled in OpenCC Worker'); } } });
-    const url = URL.createObjectURL(new Blob([__NATIVE_LOADER_SOURCE__], { type: 'text/javascript' }));
-    try {
-      const imported = await import(url) as { default: (options: {
-        wasmBinary: Uint8Array; locateFile: () => string; print: () => void; printErr: () => void;
-      }) => Promise<NativeModule> };
-      return await imported.default({
-        wasmBinary: decodeBase64(__WASM_BASE64__),
-        locateFile: () => 'opencc.wasm',
-        print: () => {}, printErr: () => {},
-      });
-    } finally { URL.revokeObjectURL(url); }
+    // This runs in a dedicated Worker, which has no window or activeWindow.
+    Object.defineProperty(self, 'fetch', { value: () => { throw new Error('Network disabled in OpenCC Worker'); } });
+    Object.defineProperty(self, 'XMLHttpRequest', { value: class { constructor() { throw new Error('Network disabled in OpenCC Worker'); } } });
+    Object.defineProperty(self, 'WebSocket', { value: class { constructor() { throw new Error('Network disabled in OpenCC Worker'); } } });
+    return createOpenCC({
+      wasmBinary: decodeBase64(__WASM_BASE64__),
+      locateFile: () => 'opencc.wasm',
+      print: () => {}, printErr: () => {},
+    });
   })();
   return native;
 }
@@ -97,9 +91,7 @@ function encodeText(value: string): Uint8Array {
 }
 
 function scalarLength(value: string): number {
-  let count = 0;
-  for (const _ of value) count++;
-  return count;
+  return Array.from(value).length;
 }
 
 function parseReport(request: EngineRequest, text: string): TraceResult | LengthReport {
@@ -166,6 +158,8 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
   mod.FS.mkdir('/snapshot');
   const files: string[] = [];
   let handle = -1;
+  let output: EngineOutput;
+  let leakedHandle = false;
   try {
     mod.FS.chdir('/snapshot');
     for (const resource of request.snapshot.resources) {
@@ -176,28 +170,29 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
     }
     handle = withBytes(mod, config, pointer => mod._occ_open(pointer, config.byteLength));
     if (handle < 1) throw nativeError(mod);
-    if (request.operation === 'validate') return undefined;
-    let status: number;
-    if (request.operation === 'checkLengths') status = mod._occ_check_lengths(handle);
-    else {
-      const input = encodeText(request.input ?? '');
-      status = withBytes(mod, input, pointer => request.operation === 'convert'
-        ? mod._occ_trace(handle, pointer, input.byteLength)
-        : mod._occ_convert(handle, pointer, input.byteLength));
+    if (request.operation !== 'validate') {
+      let status: number;
+      if (request.operation === 'checkLengths') status = mod._occ_check_lengths(handle);
+      else {
+        const input = encodeText(request.input ?? '');
+        status = withBytes(mod, input, pointer => request.operation === 'convert'
+          ? mod._occ_trace(handle, pointer, input.byteLength)
+          : mod._occ_convert(handle, pointer, input.byteLength));
+      }
+      if (status !== 0) throw nativeError(mod);
+      const pointer = mod._occ_result_ptr();
+      const length = mod._occ_result_len();
+      const structured = request.operation === 'convert' || request.operation === 'checkLengths';
+      if (length > (structured ? LIMITS.traceBytes : LIMITS.outputBytes)) {
+        throw failure(structured ? 'TRACE_LIMIT' : 'OUTPUT_LIMIT', '离线引擎输出超过大小上限。');
+      }
+      const text = decoder.decode(nativeBytes(mod, pointer, length));
+      output = structured ? parseReport(request, text) : text;
     }
-    if (status !== 0) throw nativeError(mod);
-    const pointer = mod._occ_result_ptr();
-    const length = mod._occ_result_len();
-    const structured = request.operation === 'convert' || request.operation === 'checkLengths';
-    if (length > (structured ? LIMITS.traceBytes : LIMITS.outputBytes)) {
-      throw failure(structured ? 'TRACE_LIMIT' : 'OUTPUT_LIMIT', '离线引擎输出超过大小上限。');
-    }
-    const text = decoder.decode(nativeBytes(mod, pointer, length));
-    return structured ? parseReport(request, text) : text;
   } finally {
     if (handle > 0) {
       mod._occ_close(handle);
-      if (mod._occ_handle_count() !== 0) throw failure('ENGINE_HANDLE_LEAK', '离线引擎未能释放转换器。');
+      leakedHandle = mod._occ_handle_count() !== 0;
     }
     mod.FS.chdir('/');
     for (const file of [...files].reverse()) {
@@ -211,6 +206,9 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
     }
     try { mod.FS.rmdir('/snapshot'); } catch { /* Empty snapshots or native FS bookkeeping. */ }
   }
+  // Preserve an earlier conversion error and always finish filesystem cleanup.
+  if (leakedHandle) throw failure('ENGINE_HANDLE_LEAK', '离线引擎未能释放转换器。');
+  return output;
 }
 
 self.onmessage = async (event: MessageEvent<EngineRequest>) => {

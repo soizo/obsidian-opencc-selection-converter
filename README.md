@@ -10,14 +10,15 @@ There is currently no public community-store release. Build the plugin, then cop
 
 ```text
 npm ci
-npm run build:engine
 npm run build
 
 Copy dist/main.js, dist/manifest.json and dist/versions.json to:
 <Vault>/.obsidian/plugins/opencc-selection-converter/
 ```
 
-Reload Obsidian and enable **OpenCC Selection Converter** under **Community plugins**. Building the native engine requires the OpenCC and emsdk source versions pinned in `engine/upstream.lock.json`; normal installation does not require a compiler or network access at runtime.
+Reload Obsidian and enable **OpenCC Selection Converter** under **Community plugins**. The fixed native engine assets in `engine/generated/` are bundled at build time; a clean plugin build needs only Node.js and npm dependencies. Conversion requires no network access at runtime.
+
+To rebuild the native assets after changing the engine, run `npm run build:engine` with the OpenCC and emsdk source versions pinned in `engine/upstream.lock.json`. This regenerates `engine/generated/opencc.mjs` and `engine/generated/opencc.wasm`; include both updated assets with native source changes.
 
 ## Usage
 
@@ -74,6 +75,7 @@ Tests use a dedicated vault and clear this plugin’s test cache. Do not point t
 
 ```text
 npm run check
+npm run test:build
 npm run test:cli -- smoke
 npm run test:cli -- mapping
 npm run test:cli -- editor
@@ -92,4 +94,4 @@ This repository currently has no public remote, issue tracker or formal contribu
 
 ## Licence
 
-**UNLICENSED**: this project’s source code is not currently licensed for public use, copying or distribution. Third-party components remain subject to the licences listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md); this status does not change any third-party rights.
+[MIT](LICENSE) © 2026 OpenCC Selection Converter contributors. Third-party components, including the bundled native engine, retain the licences listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

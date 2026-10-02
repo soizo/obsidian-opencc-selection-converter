@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const engineDir = new URL('../build/engine/', import.meta.url);
+const engineDir = new URL('../engine/generated/', import.meta.url);
 let nativeLoader;
 let wasm;
 try {
@@ -13,10 +13,10 @@ try {
     readFile(new URL('opencc.wasm', engineDir)),
   ]);
 } catch (cause) {
-  throw new Error('Native engine assets are missing; run npm run build:engine first.', { cause });
+  throw new Error('Bundled native engine assets are missing; restore engine/generated or run npm run build:engine.', { cause });
 }
 const licenseDir = new URL('../engine/licenses/', import.meta.url);
-const notices = [await readFile(new URL('../THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8')];
+const notices = await Promise.all(['LICENSE', 'THIRD_PARTY_NOTICES.md'].map(name => readFile(new URL(`../${name}`, import.meta.url), 'utf8')));
 for (const name of (await readdir(licenseDir)).sort()) {
   notices.push(`\n=== ${name} ===\n${await readFile(new URL(name, licenseDir), 'utf8')}`);
 }
@@ -24,7 +24,6 @@ for (const name of (await readdir(licenseDir)).sort()) {
 const licenseBanner = notices.join('\n').split(/\r\n|[\n\r\u2028\u2029]/u).map(line => `// ${line}`).join('\n');
 const commonDefines = {
   __ENGINE_ID__: JSON.stringify(`opencc-wasm:${createHash('sha256').update(wasm).update(nativeLoader).digest('hex')}`),
-  __NATIVE_LOADER_SOURCE__: JSON.stringify(nativeLoader),
   __WASM_BASE64__: JSON.stringify(wasm.toString('base64')),
 };
 const workerBuild = await build({

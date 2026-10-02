@@ -24,17 +24,19 @@ function bounded<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T
   cancelled(signal);
   return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = (error?: unknown, value?: T) => {
+    const finish = (error?: Error, value?: T) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      window.clearTimeout(timer);
       signal.removeEventListener('abort', abort);
       if (error) reject(error); else resolve(value as T);
     };
     const abort = () => finish(new PluginError('CANCELLED', '操作已取消。'));
-    const timer = setTimeout(() => finish(new PluginError('RESOURCE_TIMEOUT', '资源读取超时，迟到结果将被忽略。')), LIMITS.requestMs);
+    const timer = window.setTimeout(() => finish(new PluginError('RESOURCE_TIMEOUT', '资源读取超时，迟到结果将被忽略。')), LIMITS.requestMs);
     signal.addEventListener('abort', abort, { once: true });
-    Promise.resolve().then(operation).then(value => finish(undefined, value), error => finish(error));
+    Promise.resolve().then(operation).then(value => finish(undefined, value), (error: unknown) => {
+      finish(error instanceof Error ? error : new PluginError('RESOURCE_READ', '无法读取方案资源。'));
+    });
   });
 }
 function decode(bytes: Uint8Array, source: string): string {

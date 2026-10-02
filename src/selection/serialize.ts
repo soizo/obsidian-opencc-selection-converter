@@ -19,7 +19,7 @@ function encode(value: string, unit: VisibleUnit): string {
     }
     return result;
   }
-  return value.replace(/[\\`*_{}\[\]()<>#+\-.!|~=$%&:]/g, '\\$&');
+  return value.replace(/[\\`*_{}[\]()<>#+\-.!|~=$%&:]/g, '\\$&');
 }
 function changedSlice(source: string, from: number, to: number, changes: SourceChange[]): string {
   let result = '', cursor = from;

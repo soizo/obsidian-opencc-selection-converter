@@ -50,8 +50,9 @@ export class SchemeStore {
     const text = await adapter.read(path);
     if (text.length > metadataLimit * 2) throw new PluginError('CACHE_INVALID', '缓存元数据过大。');
     try {
-      const envelope = JSON.parse(text);
-      if (typeof envelope.body !== 'string' || await sha256(encoder.encode(envelope.body)) !== envelope.sha256) throw new Error('Checksum mismatch');
+      const envelope: unknown = JSON.parse(text);
+      if (!envelope || typeof envelope !== 'object' || !('body' in envelope) || typeof envelope.body !== 'string' ||
+          !('sha256' in envelope) || typeof envelope.sha256 !== 'string' || await sha256(encoder.encode(envelope.body)) !== envelope.sha256) throw new Error('Checksum mismatch');
       return JSON.parse(envelope.body);
     } catch { throw new PluginError('CACHE_INVALID', '缓存元数据格式或校验无效。'); }
   }

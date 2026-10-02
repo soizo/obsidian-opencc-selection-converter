@@ -20,7 +20,7 @@ export class EngineClient {
   private nextId = 0;
   private queue: Job[] = [];
   private active?: Job;
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: number;
   private disposed = false;
 
   async validate(snapshot: Snapshot, signal: AbortSignal): Promise<void> {
@@ -97,7 +97,7 @@ export class EngineClient {
           if (generation === this.generation) this.finish(new PluginError('ENGINE_PROTOCOL', '引擎消息无法读取。'));
         };
       }
-      this.timer = setTimeout(() => this.finish(new PluginError('ENGINE_TIMEOUT', '引擎工作超时，已停止。')), LIMITS.workerJobMs);
+      this.timer = window.setTimeout(() => this.finish(new PluginError('ENGINE_TIMEOUT', '引擎工作超时，已停止。')), LIMITS.workerJobMs);
       // Structured clone, deliberately no transfer list: snapshots must remain reusable.
       this.worker.postMessage(job.request);
     } catch {
@@ -108,7 +108,7 @@ export class EngineClient {
   private finish(error?: PluginError, output?: EngineOutput): void {
     const job = this.active;
     if (!job) return;
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.timer = undefined;
     this.active = undefined;
     job.signal.removeEventListener('abort', job.abort);
@@ -127,7 +127,7 @@ export class EngineClient {
 
   dispose(): void {
     this.disposed = true;
-    clearTimeout(this.timer);
+    window.clearTimeout(this.timer);
     this.stopWorker();
     for (const job of [...(this.active ? [this.active] : []), ...this.queue]) {
       job.signal.removeEventListener('abort', job.abort);

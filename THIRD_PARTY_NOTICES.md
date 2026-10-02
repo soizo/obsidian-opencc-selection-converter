@@ -48,8 +48,8 @@ License: MIT; complete text in `engine/licenses/jsonc-parser.txt`, copied verbat
 
 Source: <https://github.com/emscripten-core/emsdk>
 
-License: MIT or University of Illinois/NCSA; the complete upstream notice (including its Node-derived path utility attribution) is in `engine/licenses/emscripten.txt`. Generated loader glue is embedded in the plugin; the compiler/SDK is not downloaded or executed at runtime.
+License: MIT or University of Illinois/NCSA; the complete upstream notice (including its Node-derived path utility attribution) is in `engine/licenses/emscripten.txt`. Generated loader glue and WASM are retained in `engine/generated/` and bundled statically into the plugin. `npm run build:engine` regenerates them from the pinned sources, the checked-in patch and the C ABI bridge; the compiler/SDK is not downloaded or executed at runtime.
 
 WASM standard-library license texts are copied from the installed fixed Emscripten release into `engine/licenses/musl.txt`, `libcxx.txt`, `libcxxabi.txt`, `libunwind.txt`, `compiler-rt.txt`, and `llvm-libc.txt`. These cover the corresponding bundled runtime sources, rather than asserting that the entire SDK is distributed.
 
-The build embeds this notice and the complete texts under `engine/licenses/` as line comments in `main.js`, so the single installed asset carries its licenses. The source repository retains the original license files as well.
+The build embeds the project's MIT `LICENSE`, this notice and the complete texts under `engine/licenses/` as line comments in `main.js`, so the single installed asset carries its licenses. The source repository retains the original license files as well.
