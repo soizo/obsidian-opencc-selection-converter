@@ -1,0 +1,45 @@
+---
+name: Release plugin
+
+'on':
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Plugin version (for example, 0.2.0)
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ inputs.version }}
+
+  release:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: obsidian-opencc-selection-converter-${{ inputs.version }}
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            dist/main.js \
+            dist/manifest.json \
+            dist/versions.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OpenCC Selection Converter $VERSION" \
+            --generate-notes
