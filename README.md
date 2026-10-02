@@ -24,8 +24,8 @@ To rebuild the native assets after changing the engine, run `npm run build:engin
 
 ```text
 1. Open Settings → OpenCC Selection Converter → Add scheme.
-2. Enter a scheme name and choose a vault JSON configuration or configuration URL.
-3. Preview the configuration’s dictionary dependencies; review and explicitly approve HTTP resources when prompted.
+2. Add an official OpenCC preset in one click, or enter a custom scheme name and choose a vault JSON configuration or configuration URL.
+3. For custom schemes, preview the configuration’s dictionary dependencies; review and explicitly approve HTTP resources when prompted.
 4. Select text in Source mode or Live Preview.
 5. Use Convert selection, a scheme command, or the context menu.
 6. Undo once when needed to restore the complete conversion.

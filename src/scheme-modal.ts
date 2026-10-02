@@ -7,6 +7,15 @@ import { prepareScheme, loadPrepared } from './schemes/resources';
 import type { SchemeStore } from './schemes/store';
 import { errorText, t } from './i18n';
 
+const OFFICIAL_CONFIG_BASE = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/config';
+const OFFICIAL_PRESETS = [
+  ['s2t', 'official.s2t'], ['t2s', 'official.t2s'], ['s2tw', 'official.s2tw'], ['tw2s', 'official.tw2s'],
+  ['s2hk', 'official.s2hk'], ['hk2s', 'official.hk2s'], ['s2twp', 'official.s2twp'], ['tw2sp', 'official.tw2sp'],
+  ['t2tw', 'official.t2tw'], ['tw2t', 'official.tw2t'], ['t2hk', 'official.t2hk'], ['hk2t', 'official.hk2t'],
+] as const;
+
+type OfficialPreset = (typeof OFFICIAL_PRESETS)[number];
+
 export interface SchemeHost extends Plugin {
   store: SchemeStore;
   engine: EngineClient;
@@ -73,6 +82,19 @@ export class SchemeEditModal extends Modal {
     this.host.uiModals.add(this);
     this.setTitle(this.original ? t('modal.editTitle') : t('modal.addTitle'));
     this.form = this.contentEl.createDiv();
+    if (!this.original) {
+      this.form.createEl('h3', { text: t('official.title') });
+      this.form.createEl('p', { text: t('official.desc') });
+      for (const preset of OFFICIAL_PRESETS) {
+        const location = this.officialLocation(preset[0]);
+        const added = this.host.store.getDefinitions().some(definition => definition.source.kind === 'url' && definition.source.location === location);
+        new Setting(this.form).setName(preset[0]).setDesc(t(preset[1])).addButton(button => {
+          button.setButtonText(added ? t('official.added') : t('official.add')).setDisabled(added).onClick(() => { void this.addOfficial(preset); });
+          button.buttonEl.dataset.openccPreset = preset[0];
+        });
+      }
+      this.form.createEl('h3', { text: t('official.custom') });
+    }
     new Setting(this.form).setName(t('field.schemeName')).addText(text => text.setValue(this.definition.name).onChange(value => { this.definition.name = value; }).inputEl.setAttribute('aria-label', t('field.schemeName')));
     new Setting(this.form).setName(t('field.source')).addDropdown(dropdown => {
       dropdown.addOptions({ vault: t('source.vault'), url: t('source.url') }).setValue(this.definition.source.kind).onChange(value => { this.definition.source.kind = value as 'url' | 'vault'; });
@@ -98,6 +120,24 @@ export class SchemeEditModal extends Modal {
     new Setting(this.contentEl).addButton(button => button.setButtonText(t('action.close')).onClick(() => { if (!this.publishing) this.close(); }));
   }
   openPreview(): void { this.open(); void this.prepare(); }
+  private officialLocation(id: OfficialPreset[0]): string { return `${OFFICIAL_CONFIG_BASE}/${id}.json`; }
+  private async addOfficial(preset: OfficialPreset): Promise<void> {
+    if (this.busy || this.controller.signal.aborted) return;
+    this.definition = { id: crypto.randomUUID(), name: preset[0], source: { kind: 'url', location: this.officialLocation(preset[0]) } };
+    this.overridesText = '{}';
+    this.busy = true; this.lock(true); this.previewEl.empty(); this.status.setText(t('official.loading', { name: preset[0] }));
+    try {
+      await this.host.store.saveDraft(this.definition);
+      const plan = await prepareScheme(this.app, this.definition, this.controller.signal);
+      if (this.controller.signal.aborted) return;
+      this.busy = false;
+      await this.load(plan);
+    } catch (error) { await this.failed(error); }
+    finally {
+      this.busy = false;
+      if (!this.publishing && this.contentEl.isConnected) this.lock(false);
+    }
+  }
   private lock(locked: boolean): void {
     for (const field of this.form.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLSelectElement | HTMLTextAreaElement>('input, button, select, textarea')) field.disabled = locked;
   }

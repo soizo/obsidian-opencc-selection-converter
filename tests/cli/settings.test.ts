@@ -101,6 +101,18 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         ok(names.includes(t(key)), `Setting missing from search: ${key}`);
       }
     } },
+    { name: 'settings/official-presets', run: async () => {
+      await mounted(async root => {
+        button(root, t('settings.addScheme'));
+        const presetButtons = Array.from(modalDocument().querySelectorAll<HTMLButtonElement>('[data-opencc-preset]'));
+        equal(presetButtons.map(item => item.dataset.openccPreset).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t');
+        const s2t = presetButtons[0]; ok(s2t); s2t.click();
+        const location = 'https://raw.githubusercontent.com/BYVoid/OpenCC/master/data/config/s2t.json';
+        await wait(() => endpoint.store.getDrafts().some(item => item.source.location === location), 'Create official preset draft');
+        const draft = endpoint.store.getDrafts().find(item => item.source.location === location); ok(draft);
+        equal(draft.name, 's2t'); equal(draft.source.kind, 'url');
+      });
+    } },
     { name: 'settings/crud-default', run: async () => {
       await mounted(async root => {
         const name = `UI ${crypto.randomUUID()}`;
