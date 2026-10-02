@@ -1,8 +1,46 @@
 import { build } from 'esbuild';
-import { copyFile, mkdir } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const engineDir = new URL('../build/engine/', import.meta.url);
+let nativeLoader;
+let wasm;
+try {
+  [nativeLoader, wasm] = await Promise.all([
+    readFile(new URL('opencc.mjs', engineDir), 'utf8'),
+    readFile(new URL('opencc.wasm', engineDir)),
+  ]);
+} catch (cause) {
+  throw new Error('Native engine assets are missing; run npm run build:engine first.', { cause });
+}
+const licenseDir = new URL('../engine/licenses/', import.meta.url);
+const notices = [await readFile(new URL('../THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8')];
+for (const name of (await readdir(licenseDir)).sort()) {
+  notices.push(`\n=== ${name} ===\n${await readFile(new URL(name, licenseDir), 'utf8')}`);
+}
+// Line comments preserve license text, including musl's literal block-comment delimiters.
+const licenseBanner = notices.join('\n').split(/\r\n|[\n\r\u2028\u2029]/u).map(line => `// ${line}`).join('\n');
+const commonDefines = {
+  __ENGINE_ID__: JSON.stringify(`opencc-wasm:${createHash('sha256').update(wasm).update(nativeLoader).digest('hex')}`),
+  __NATIVE_LOADER_SOURCE__: JSON.stringify(nativeLoader),
+  __WASM_BASE64__: JSON.stringify(wasm.toString('base64')),
+};
+const workerBuild = await build({
+  absWorkingDir: root,
+  entryPoints: ['src/engine/worker.ts'],
+  bundle: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  define: commonDefines,
+  write: false,
+  minifySyntax: true,
+  logLevel: 'warning',
+});
+const workerSource = workerBuild.outputFiles[0]?.text;
+if (!workerSource) throw new Error('Worker build produced no JavaScript.');
 await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
 await build({
   absWorkingDir: root,
@@ -12,8 +50,14 @@ await build({
   format: 'cjs',
   platform: 'browser',
   target: 'es2022',
+  loader: { '.ocd': 'binary', '.ocd2': 'binary' },
+  banner: { js: licenseBanner },
   external: ['obsidian', '@codemirror/state', '@codemirror/view', '@codemirror/language', '@codemirror/commands', '@lezer/common'],
-  define: { __TEST__: String(process.argv.includes('--test')) },
+  define: {
+    ...commonDefines,
+    __WORKER_SOURCE__: JSON.stringify(workerSource),
+    __TEST__: String(process.argv.includes('--test')),
+  },
   treeShaking: true,
   minifySyntax: true,
   sourcemap: false,

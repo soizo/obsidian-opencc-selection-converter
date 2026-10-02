@@ -1,10 +1,13 @@
 import { MarkdownView, Notice, Plugin } from 'obsidian';
 import { PluginError } from './errors';
 import { captureTarget, editorExtension } from './selection/editor';
+import { EngineClient } from './engine/client';
 
 declare const __TEST__: boolean;
 
 export default class OpenCCSelectionConverter extends Plugin {
+  readonly engine = new EngineClient();
+
   async onload(): Promise<void> {
     this.registerEditorExtension(editorExtension);
     this.addCommand({
@@ -17,6 +20,8 @@ export default class OpenCCSelectionConverter extends Plugin {
       attachCliTests(this);
     }
   }
+
+  onunload(): void { this.engine.dispose(); }
 
   async convertDefault(): Promise<{changed: false; code: string}> {
     try {

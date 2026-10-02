@@ -105,7 +105,7 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 - [x] **运行红灯。** `npm run test:cli -- smoke`；确认真实 CLI 报告插件/命令缺失，或者保护断言失败。先让 runner 能报告失败，再实现插件行为，不把构建错误当完整行为回归证据。
 - [x] **实现最小闭环。** 创建真实插件及构建；通过 editor extension 与公开 editorInfoField 建立 Editor→EditorView 关联，不依赖 editor.cm 或 state.values 私有结构；记录原始编辑视图而非操作时猜活动文件；源码/实时预览由统一入口识别。`limits.ts` 写入设计全部固定边界；测试入口只在 test define 下编译，读取结果路径受 vault guard 限制。
 - [x] **验证。** `npm run check && npm run test:cli -- smoke`；至少上述三个命名用例通过；生产构建查不到 `runCliSuite`，不创建笔记正文缓存。
-- [ ] **提交。** 显式 stage 本任务 Files 中的新文件（不 stage dist、vault 或 `.opencc-test-results`），`git commit -m "feat: add plugin entry and Obsidian CLI test harness"`。
+- [x] **提交。** 显式 stage 本任务 Files 中的新文件（不 stage dist、vault 或 `.opencc-test-results`），`git commit -m "feat: add plugin entry and Obsidian CLI test harness"`。
 
 ### Task 2: 固定版原生 OpenCC 的离线 WASM 运行
 
@@ -113,15 +113,15 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** 定义 Snapshot；产出 `EngineClient.validate(snapshot: Snapshot, signal: AbortSignal): Promise<void>`、`convertPlain(snapshot, input, signal): Promise<string>`、`dispose(): void`。C ABI 为 `occ_open(configPtr,len)`、`occ_convert(handle,inputPtr,len)`、`occ_result_ptr()`、`occ_result_len()`、`occ_error_ptr()`、`occ_error_len()`、`occ_close(handle)`；open 返回正数句柄或 -1，convert/后续 trace/check 返回 0 或 -1；close 返回 void，所有 ptr/len 为无符号字节位置/长度。结果内存归模块，JS 立即拷贝，输入堆分配并 finally 释放。
 
-- [ ] **写失败用例。** `engine/offline-formats`、`engine/long-input`、`engine/invalid-encoding`，固定 text/inline/ocd/ocd2 样例与期望；二进制 fixture 由固定版官方工具生成一次并记录来源，业务断言仍在 CLI。
+- [x] **写失败用例。** `engine/offline-formats`、`engine/long-input`、`engine/invalid-encoding`，固定 text/inline/ocd/ocd2 样例与期望；二进制 fixture 由固定版官方工具生成一次并记录来源，业务断言仍在 CLI。
   ```ts
   equal(await actualEngine('s2twp', '服务器软件'), '伺服器軟體');
   equal(await actualEngine('custom-chain', '软件'.repeat(25000)), '軟體'.repeat(25000));
   await rejectsCode(actualEngine('custom-chain', '甲\u0000乙'), 'INVALID_TEXT');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- engine`；正确识别未实现的 engine endpoint，不以下载失败替代行为失败。
-- [ ] **实现真实引擎。** 克隆固定源码/emsdk 到规定目录，构建 browser/worker-only ESM；编译异常捕获和内存上限，不启用 Emscripten 动态链接；桥接预检再次拒绝非 mmseg 分词，不能让宿主漏检变成任意插件加载。桥接严格检查 UTF-8/NUL、显式字节长度及错误；Worker 内禁用网络，传入 wasmBinary/locateFile，不依赖 Electron 的 process 探测。本任务先验证固定 WASM 内存上限及返回结果大小；任务 3 在共享匹配循环中补齐生成过程预算，在此之前不宣称超限保护全部完成。实现单 Worker 串行队列、job ID/实例 generation、任务开始后的 watchdog 和 signal 取消；快照字节不能因 transfer 而让后续重载失效。记录许可。
-- [ ] **验证。** `npm run build:engine && npm run check && npm run test:cli -- engine`；覆盖 normalization、mmseg/缺省、两种 group 策略、多候选、混合换行、四种词典、破损词典；50,000 字不切片、不触发栈越界。比较实例销毁前后句柄数量，错误后能重新加载。
+- [x] **运行红灯。** `npm run test:cli -- engine`；正确识别未实现的 engine endpoint，不以下载失败替代行为失败。
+- [x] **实现真实引擎。** 克隆固定源码/emsdk 到规定目录，构建 browser/worker-only ESM；编译异常捕获和内存上限，不启用 Emscripten 动态链接；桥接预检再次拒绝非 mmseg 分词，不能让宿主漏检变成任意插件加载。桥接严格检查 UTF-8/NUL、显式字节长度及错误；Worker 内禁用网络，传入 wasmBinary/locateFile，不依赖 Electron 的 process 探测。本任务先验证固定 WASM 内存上限及返回结果大小；任务 3 在共享匹配循环中补齐生成过程预算，在此之前不宣称超限保护全部完成。实现单 Worker 串行队列、job ID/实例 generation、任务开始后的 watchdog 和 signal 取消；快照字节不能因 transfer 而让后续重载失效。记录许可。
+- [x] **验证。** `npm run build:engine && npm run check && npm run test:cli -- engine`；覆盖 normalization、mmseg/缺省、两种 group 策略、多候选、混合换行、四种词典、破损词典；50,000 字不切片、不触发栈越界。比较实例销毁前后句柄数量，错误后能重新加载。
 - [ ] **提交。** stage 本任务源码/fixture/来源记录，不提交克隆目录和 SDK；`git commit -m "feat: run native OpenCC offline in a browser worker"`。
 
 ### Task 3: 原生逐次匹配追踪与完整词条检查

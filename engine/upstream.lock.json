@@ -1,0 +1,13 @@
+{
+  "opencc": {
+    "repository": "https://github.com/BYVoid/OpenCC",
+    "tag": "ver.1.4.2",
+    "commit": "025f371dc76b598d77384fbdab90c937471844d8"
+  },
+  "emsdk": {
+    "repository": "https://github.com/emscripten-core/emsdk",
+    "version": "4.0.15",
+    "commit": "389a68bc35dcff7ebae4614e1615099dafda00d1"
+  },
+  "bridgeAbi": 1
+}
