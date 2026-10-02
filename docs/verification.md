@@ -121,6 +121,14 @@
 - 测试观察并修复：关闭加载后状态卡在 loading；设置测试误关闭宿主容器导致旧弹窗抢点击；桌面原生菜单会阻塞自动化，右键测试显式使用同一 Obsidian `Menu` 的 DOM 模式。测试驱动 CLI 上限从 60 秒调为 120 秒；一次超时后写出的通过报告未计为成功，使用新运行 ID 复验。
 - 设置专项最终 **11/11**，独立右键专项 **2/2**。`npm run check && npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：**126 通过 / 0 失败**，产物 **1,163,191 字节**。Impeccable 静态检测无发现；主动 LSP 0 诊断，1 文件确认干净、5 文件未确认。
 
+## 阶段 11：正式包与交付验收
+
+- 正式构建安装到专用 vault 后确认没有 `runCliSuite` 测试入口。通过真实 Obsidian 设置窗口添加库内 inline OpenCC 方案、设为默认、在真实 Markdown 编辑器执行正式 `convert-default` 命令，并用一次真实撤销恢复原文。结果：`production=true`、`testHook=false`、转换和撤销均通过。
+- 正式发布目录为 `dist/`：`main.js`、`manifest.json`、`versions.json`。最近一次正式产物检查为 **1,163,191 字节**；WASM 32/256 MiB，完整许可已嵌入，无测试夹具或 Node 运行时依赖。
+- 新增用户 README 与测试/发布文档，说明安装、URL/vault 依赖解析、缓存与隐私、区域规则、严格/force、数学白名单、已知限制、专用测试 vault 和真机边界。仓库没有公开远程、贡献流程或项目许可证，README 明确标记 **UNLICENSED**，不替第三方组件赋予许可。
+- 既有完整桌面矩阵的最近新鲜证据为 **126 通过 / 0 失败**。第 11 阶段没有重复该矩阵；只新增并运行正式包端到端验收。
+- Obsidian 桌面应用与 installer 均为 **1.13.7**。两次 `dev:mobile on` 都在模拟环境重载后报告社区插件不存在；第二次显式 enable/reload 仍为 `plugin not found`。两次均通过 shell trap 恢复 `dev:mobile off`。因此没有移动模拟通过证据，也没有 Android/iOS 真机证据。
+
 ## 尚未验收
 
-阶段 11 尚未完成：完整用户工作流、移动模拟与可安装交付尚未验收；复杂无别名 wikilink 仍有兼容性缺口。尚未进行 Android/iOS 真机验证。可行性探针不替代正式插件验收。
+移动模拟、Android/iOS 真机以及用户真实 URL/vault 方案仍未验收；复杂无别名 wikilink 仍会保守拒绝。桌面正式包可以安装和完成合成方案工作流，但在获得移动证据前不能宣称整个跨平台发布已完全验收。可行性探针不替代正式插件验收。

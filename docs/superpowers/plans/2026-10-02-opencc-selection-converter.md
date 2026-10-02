@@ -278,17 +278,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `npm run build` 生成无测试入口的正式发布文件；`npm run check` 静态检查；`npm run test:cli -- all` 全矩阵；`npm run test:cli -- production` 不依赖 runCliSuite，只从真实命令/设置/笔记与 CLI 状态验证正式构建。所有报告包含版本、引擎 ID、用例数和通过/失败，不存真实笔记内容。
 
-- [ ] **写失败用例。** `stability/limits-cancel`、`stability/reload-offline`、`stability/mobile-emulation`、`production/install`：
+- [x] **写失败用例。** `stability/limits-cancel`、`stability/reload-offline`、`stability/mobile-emulation`、`production/install`：
   ```ts
   equal(await convertOverLimit(200001), {changed:false,code:'INPUT_LIMIT'});
   equal(await requestsAfterReloadAndCachedConvert(), []);
   equal(await releasedArtifactHasTestHook(), false);
   equal(await conversionAfterWorkerTrapAndRecovery(), expectedText);
   ```
-- [ ] **运行红灯。** `npm run test:cli -- stability production`；对缺少的限额、取消恢复、正式构建打包能力形成实际失败；已由前序任务实现的验收项可直接记录通过，不为制造红灯修改已通过功能。
-- [ ] **补齐交付闭环。** 覆盖配置/资源数/深度/内存/输出/追踪/超时预算，在 Worker 内止住生成；确保只有一个队列与活动转换器，卸载后无监听/Worker/Blob 泄漏。生产构建内嵌引擎，安装只需正常 Obsidian 发布资产；README 明确 URL 基址、缓存来源、区域例子、等长、force、公式白名单、未支持配置及移动未真机验证。许可清单与锁定版本对应，不添加未授权产品许可声明。
+- [x] **运行红灯。** `npm run test:cli -- stability production`；对缺少的限额、取消恢复、正式构建打包能力形成实际失败；已由前序任务实现的验收项可直接记录通过，不为制造红灯修改已通过功能。
+- [x] **补齐交付闭环。** 覆盖配置/资源数/深度/内存/输出/追踪/超时预算，在 Worker 内止住生成；确保只有一个队列与活动转换器，卸载后无监听/Worker/Blob 泄漏。生产构建内嵌引擎，安装只需正常 Obsidian 发布资产；README 明确 URL 基址、缓存来源、区域例子、等长、force、公式白名单、未支持配置及移动未真机验证。许可清单与锁定版本对应，不添加未授权产品许可声明。
 - [ ] **最终验证。** `npm run build:engine && npm run check && npm run build && npm run test:cli -- all`；在专用 vault 用 `dev:mobile on` 检查设置/入口/横向溢出和转换，finally `dev:mobile off`。再 `npm run test:cli -- production`，正式构建重载后验证真实 URL/vault/缓存/转换/undo 和控制台错误；对更改源码做主动 LSP diagnostics。记录桌面应用/installer 版本、模拟与真机差别、通过数及残余限制；没有用户真实方案时不得宣称已验收其方案。
-- [ ] **提交与报告。** stage 已审阅源码、测试、README 和验证记录，`git commit -m "test: verify packaged converter through Obsidian CLI"`；检查工作区，报告安装文件路径与证据，不推送、不发布远程 release。
+- [x] **提交与报告。** stage 已审阅源码、测试、README 和验证记录，`git commit -m "test: verify packaged converter through Obsidian CLI"`；检查工作区，报告安装文件路径与证据，不推送、不发布远程 release。桌面正式包已通过；移动模拟与真机仍为明确阻塞项。
 
 ## 依赖顺序、停点与审查
 

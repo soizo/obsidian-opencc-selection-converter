@@ -59,6 +59,38 @@ async function ensureInside(vault, directory) {
   if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('VAULT_GUARD: deployment path escapes test vault');
 }
 
+async function runProduction(pluginId) {
+  const name = `Production ${randomUUID()}`;
+  const folder = '__opencc_production__';
+  const configPath = `${folder}/config-${randomUUID()}.json`;
+  const notePath = `${folder}/note-${randomUUID()}.md`;
+  const result = await evaluate(`(async()=>{
+    const wait=async(test,label)=>{const end=Date.now()+20000;while(!test()&&Date.now()<end)await new Promise(r=>setTimeout(r,50));if(!test())throw new Error(label)};
+    let uiDoc=document;
+    const button=name=>{const el=[...uiDoc.querySelectorAll('button')].filter(x=>x.textContent===name&&!x.disabled).at(-1);if(!el)throw new Error('Missing button: '+name);el.click()};
+    const field=(label,value)=>{const el=[...uiDoc.querySelectorAll('[aria-label="'+label+'"]')].at(-1);if(!el)throw new Error('Missing field: '+label);el.value=value;el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}))};
+    const p=app.plugins.plugins[${JSON.stringify(pluginId)}];
+    if(!p||p.runCliSuite!==undefined)throw new Error('Not a production plugin');
+    let folder=app.vault.getAbstractFileByPath(${JSON.stringify(folder)});if(!folder)await app.vault.createFolder(${JSON.stringify(folder)});
+    const config=JSON.stringify({conversion_chain:[{dict:{type:'inline',entries:{'软件':'軟體'}}}]});
+    let configFile=app.vault.getAbstractFileByPath(${JSON.stringify(configPath)});configFile?await app.vault.modify(configFile,config):configFile=await app.vault.create(${JSON.stringify(configPath)},config);
+    let note=app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});note?await app.vault.modify(note,'前软件后'):note=await app.vault.create(${JSON.stringify(notePath)},'前软件后');
+    app.setting.open();await new Promise(r=>setTimeout(r,500));app.setting.openTabById(${JSON.stringify(pluginId)});
+    await wait(()=>app.setting.activeTab?.id===${JSON.stringify(pluginId)},'settings tab');uiDoc=app.setting.tabContentContainer.ownerDocument;
+    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>x.textContent==='添加方案'),'settings');
+    button('添加方案');field('方案名称',${JSON.stringify(name)});field('配置来源','vault');field('配置位置',${JSON.stringify(configPath)});button('预览依赖');
+    await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>x.textContent==='确认并加载'&&!x.disabled),'preview');button('确认并加载');
+    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>x.textContent?.includes('添加 OpenCC')),'activation');
+    const select=app.setting.tabContentContainer.querySelector('[aria-label="默认方案"]');const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(name)}));if(!option)throw new Error('Missing default option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
+    await new Promise(r=>setTimeout(r,300));app.setting.close();
+    const leaf=app.workspace.getLeaf(false);await leaf.openFile(note,{state:{mode:'source',source:true}});const view=leaf.view;await view.setState({...view.getState(),mode:'source',source:true},{history:false});
+    await wait(()=>view.editor.getValue()==='前软件后','note open');view.editor.setSelection({line:0,ch:1},{line:0,ch:3});await app.commands.executeCommandById(${JSON.stringify(`${pluginId}:convert-default`)});await wait(()=>view.editor.getValue()==='前軟體后','conversion');view.editor.undo();await wait(()=>view.editor.getValue()==='前软件后','undo');
+    return JSON.stringify({production:true,testHook:false,commands:['convert-default','convert-with-scheme'],conversion:true,undo:true});
+  })()`);
+  if (!result.includes('"production":true') || !result.includes('"undo":true')) throw new Error(`Production workflow failed: ${result}`);
+  console.log(`PASS production/install-and-workflow ${result.replace(/^=> /, '')}`);
+}
+
 async function main() {
   await waitForWorkspace();
   const vault = await guardVault(expectedVault);
@@ -68,7 +100,8 @@ async function main() {
   if (!rejected) throw new Error('smoke/wrong-vault: guard allowed a different vault');
   console.log('PASS smoke/wrong-vault (read-only CLI check; no deployment writes yet)');
 
-  await exec(process.execPath, [path.join(root, 'scripts/build.mjs'), '--test'], { cwd: root, timeout: 60000 });
+  const productionOnly = suites.length === 1 && suites[0] === 'production';
+  await exec(process.execPath, [path.join(root, 'scripts/build.mjs'), ...(productionOnly ? [] : ['--test'])], { cwd: root, timeout: 60000 });
   const configDir = path.join(vault, '.obsidian');
   await ensureInside(vault, configDir);
   const parent = path.join(configDir, 'plugins');
@@ -116,10 +149,11 @@ async function main() {
     await cli('plugin:enable', `id=${pluginId}`, 'filter=community');
     await cli('plugin:reload', `id=${pluginId}`);
     await delay(500);
-    pluginLoaded = await evaluate(`Boolean(app.plugins.plugins['${pluginId}']?.runCliSuite)`) === '=> true';
+    pluginLoaded = await evaluate(`Boolean(app.plugins.plugins['${pluginId}']${productionOnly ? '' : '?.runCliSuite'})`) === '=> true';
     if (!pluginLoaded) await delay(1000);
   }
-  if (!pluginLoaded) throw new Error('Test plugin did not remain loaded after vault reload');
+  if (!pluginLoaded) throw new Error('Plugin did not remain loaded after vault reload');
+  if (productionOnly) { await runProduction(pluginId); return; }
 
   if (suites.some(suite => ['all', 'resources', 'cache', 'settings'].includes(suite))) fixture = await startFixtureServer();
   let passed = 1;

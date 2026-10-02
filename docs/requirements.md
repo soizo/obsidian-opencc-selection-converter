@@ -1,6 +1,6 @@
 # 需求确认记录
 
-状态：[书面设计](superpowers/specs/2026-10-02-opencc-selection-converter-design.md)已获确认；[实施计划](superpowers/plans/2026-10-02-opencc-selection-converter.md)待审核，尚未开始插件实现。
+状态：[书面设计](superpowers/specs/2026-10-02-opencc-selection-converter-design.md)与[实施计划](superpowers/plans/2026-10-02-opencc-selection-converter.md)已获确认；桌面正式包及合成方案工作流已实现并验收，移动模拟与 Android/iOS 真机仍未验收。
 
 ## 已确认
 
