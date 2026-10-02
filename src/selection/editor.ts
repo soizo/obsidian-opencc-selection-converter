@@ -1,10 +1,11 @@
 import { editorInfoField } from 'obsidian';
 import type { Editor, MarkdownView, TFile } from 'obsidian';
-import { ViewPlugin } from '@codemirror/view';
-import type { EditorView, ViewUpdate } from '@codemirror/view';
-import type { Text } from '@codemirror/state';
+import { EditorView, ViewPlugin } from '@codemirror/view';
+import type { ViewUpdate } from '@codemirror/view';
+import { EditorSelection, EditorState, Transaction, type Text } from '@codemirror/state';
+import { isolateHistory } from '@codemirror/commands';
 import { PluginError } from '../errors';
-import type { Span } from './types';
+import type { PatchPlan, Span } from './types';
 
 const editors = new WeakMap<Editor, EditorTracker>();
 
@@ -47,6 +48,27 @@ export type CapturedTarget = {
   anchor: number;
   head: number;
 };
+
+export function assertTargetCurrent(target: CapturedTarget): void {
+  const tracked = editors.get(target.view.editor);
+  if (!tracked || tracked.cm !== target.cm || !target.cm.dom.isConnected || target.view.getMode() !== 'source' || target.view.file !== target.file || target.file.path !== target.filePath || target.view.app.vault.getAbstractFileByPath(target.filePath) !== target.file || tracked.revision !== target.revision || tracked.selectionRevision !== target.selectionRevision || target.cm.state.doc !== target.doc || target.cm.state.selection.ranges.length !== 1 || target.cm.state.selection.main.anchor !== target.anchor || target.cm.state.selection.main.head !== target.head) {
+    throw new PluginError('STALE_SELECTION', '原始编辑器、文档或选区已变化；未写入结果。');
+  }
+  if (target.cm.state.facet(EditorState.readOnly) || !target.cm.state.facet(EditorView.editable)) throw new PluginError('READ_ONLY', '编辑器当前不可写。');
+}
+
+/** The caller must validate the complete patch before this synchronous commit. */
+export function commitPatch(target: CapturedTarget, patch: PatchPlan): void {
+  assertTargetCurrent(target);
+  if (!patch.changes.length) return;
+  const changes = target.cm.state.changes(patch.changes);
+  const forward = target.anchor <= target.head;
+  target.cm.dispatch({
+    changes,
+    selection: EditorSelection.single(changes.mapPos(target.anchor, forward ? -1 : 1), changes.mapPos(target.head, forward ? 1 : -1)),
+    annotations: [isolateHistory.of('full'), Transaction.userEvent.of('input.opencc')],
+  });
+}
 
 export function captureTarget(view: MarkdownView): CapturedTarget {
   if (view.getMode() !== 'source' || !view.file) {

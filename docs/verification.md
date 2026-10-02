@@ -101,6 +101,16 @@
 - 一次 CLI 运行超时，未计为成功；重跑使用新运行 ID 后确认通过。临时合成夹具诊断代码已移除。
 - 最终 `npm run check && npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：**99 通过 / 0 失败**。产物仍为 1,095,776 字节，用户命令尚未接通。主动 LSP：0 诊断，2 文件确认干净、3 文件未确认。
 
+## 阶段 9：原子写回与竞争保护
+
+- 默认命令已接入 store → 投影 → 原生转换 → 候选校验 → 同步终检 → 单次 CM6 transaction。每个编辑器的后发任务取消旧任务，卸载取消在途转换；无变化不创建撤销记录。
+- 检查原始文件对象和路径、宿主索引、编辑器身份/存活、文档对象及单调 revision、选区方向和 selectionRevision、只读状态、方案存在性及取消信号。单次写回使用 `isolateHistory.of('full')` 和 `input.opencc`，映射恢复结果选区。
+- 首轮真实宿主测试观察到 NOT_IMPLEMENTED 红灯，同时暴露共享夹具被前次输入的自动保存污染；编辑器测试改用独立文件，不伪造撤销栈。
+- 编辑器专项 **17/17**：源码/实时预览相邻输入与转换分别撤销、真实 redo、编辑后撤销和选区往返 ABA、加载期间同步修改/改选区/重命名/关页/删方案/取消/只读、后发任务覆盖、无变化历史、其他文件焦点与同文件双视图。竞争用例只暂停真实快照读取的返回，不替换引擎或编辑器。
+- CRLF 实测：原始磁盘 CRLF，宿主打开后编辑器为 LF，转换并通过公开 `view.save()` 保存后磁盘也是 LF。证据见 [`probes/editor-crlf.json`](probes/editor-crlf.json)。保证编辑器内物理换行，不承诺磁盘 byte-for-byte 换行保真。
+- 本地 commands 声明依赖另一份较新的 state；TypeScript paths 统一到 Obsidian SDK 对应的根 state 声明。所有 CM 包仍 external，运行时始终使用宿主实例；未新增运行时依赖。
+- `npm run check && npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：**115 通过 / 0 失败**，产物 **1,131,907 字节**，许可证完整且不含测试/Node 依赖。主动 LSP：0 诊断，2 文件确认干净、2 文件未确认。
+
 ## 尚未验收
 
-阶段 9–11 尚未完成：原子写回、设置界面与完整用户工作流尚未接通；复杂无别名 wikilink 仍有兼容性缺口。加载和缓存已有真实宿主验证，但默认转换命令仍返回 NO_SCHEME。尚未进行 Android/iOS 真机验证。可行性探针不替代正式插件验收。
+阶段 10–11 尚未完成：设置界面、方案选择/右键入口与完整用户工作流尚未验收；复杂无别名 wikilink 仍有兼容性缺口。默认命令可以使用已持久化的默认方案，尚无方案时返回 NO_SCHEME。尚未进行 Android/iOS 真机验证。可行性探针不替代正式插件验收。

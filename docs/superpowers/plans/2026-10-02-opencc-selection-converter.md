@@ -242,17 +242,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `captureTarget(view:MarkdownView): CapturedTarget` 增补每个 EditorView 单调 revision；`src/main.ts` 的插件方法 `convertSelection(target:CapturedTarget, schemeId:string, signal:AbortSignal):Promise<ConversionOutcome>` 使用实例持有的 store/engine 和 store.getRules()；`src/selection/editor.ts` 的 `commitPatch(target:CapturedTarget, patch:PatchPlan):void` 同步终检和 dispatch。ConversionOutcome 为 changed/no-change/skipped 或结构化失败，所有入口复用。右键传实际触发的 view，命令在调用当下捕获目标，不能在 await 后重新取活动视图。
 
-- [ ] **写失败用例。** `editor/atomic-undo`、`editor/aba`、`editor/view-identity`：
+- [x] **写失败用例。** `editor/atomic-undo`、`editor/aba`、`editor/view-identity`：
   ```ts
   equal(await snapshotAfterOneUndo(), originalDocument);
   equal(await priorTypingAfterConversionUndo(), '用户先前输入仍在');
   equal(await commitAfterEditThenUndoToSameText(), {changed:false,code:'STALE_SELECTION'});
   equal(await affectedFilesWhenOtherViewGetsFocus(), ['原始目标.md']);
   ```
-- [ ] **运行红灯。** `npm run test:cli -- editor`；在真实应用 editor/history 中断言，不能用数组栈伪造撤销。
-- [ ] **实现提交协议。** editor extension 跟踪 docChanged revision、真实选区变化的 selectionRevision 和视图销毁；检查文件对象/捕获路径、anchor/head、scheme 是否仍存在、任务 token/readOnly 状态；异步阶段过后同步一次终检再 dispatch。CM6 transaction 使用 `isolateHistory.of('full')` 与 `Transaction.userEvent.of('input.opencc')`，保护相邻输入；后发任务取消旧任务，取消不提交结果；恢复结果对应选区，无变化不入 undo 历史。
-- [ ] **验证。** `npm run test:cli -- editor`；源码/实时预览、多选拒绝、阅读提示、无选区、弹窗后 selection 改变、文档修改后撤销、同文件双视图、文件重命名/关闭、方案删除、取消/后发任务、同步修改；compare 整篇哨兵内容。另用 CLI 创建原始 CRLF 文件并记录打开/保存后的实际磁盘行为，不冒称 byte-for-byte 保真。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: commit selection conversion atomically with stale-state guards"`。
+- [x] **运行红灯。** `npm run test:cli -- editor`；在真实应用 editor/history 中断言，不能用数组栈伪造撤销。
+- [x] **实现提交协议。** editor extension 跟踪 docChanged revision、真实选区变化的 selectionRevision 和视图销毁；检查文件对象/捕获路径、anchor/head、scheme 是否仍存在、任务 token/readOnly 状态；异步阶段过后同步一次终检再 dispatch。CM6 transaction 使用 `isolateHistory.of('full')` 与 `Transaction.userEvent.of('input.opencc')`，保护相邻输入；后发任务取消旧任务，取消不提交结果；恢复结果对应选区，无变化不入 undo 历史。
+- [x] **验证。** `npm run test:cli -- editor`；源码/实时预览、多选拒绝、阅读提示、无选区、弹窗后 selection 改变、文档修改后撤销、同文件双视图、文件重命名/关闭、方案删除、取消/后发任务、同步修改；compare 整篇哨兵内容。另用 CLI 创建原始 CRLF 文件并记录打开/保存后的实际磁盘行为，不冒称 byte-for-byte 保真。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: commit selection conversion atomically with stale-state guards"`。
 
 ### Task 10: 原生方案设置、快捷入口与等长检查交互
 

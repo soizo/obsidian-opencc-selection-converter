@@ -3,10 +3,11 @@ import type { App, Plugin } from 'obsidian';
 
 export type TestPlugin = Plugin & { convertDefault(): Promise<unknown> };
 
-export async function openFixture(app: App, text: string): Promise<MarkdownView> {
+export async function openFixture(app: App, text: string, name = 'smoke.md'): Promise<MarkdownView> {
+  if (!/^[A-Za-z0-9_-]+\.md$/.test(name)) throw new Error('Invalid fixture filename');
   const folder = '__opencc_tests__';
   if (!app.vault.getAbstractFileByPath(folder)) await app.vault.createFolder(folder);
-  const path = `${folder}/smoke.md`;
+  const path = `${folder}/${name}`;
   let file = app.vault.getAbstractFileByPath(path);
   if (!file) file = await app.vault.create(path, text);
   else if (file instanceof TFile) await app.vault.modify(file, text);
