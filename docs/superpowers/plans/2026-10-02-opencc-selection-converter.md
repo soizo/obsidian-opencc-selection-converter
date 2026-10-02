@@ -206,17 +206,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `projectLatex(source: string, region: Region, selection: Span, rules: RuleSettings): MathProjection` 返回可见 units、子区、保护跨度和结构指纹；复用任务 6 的 Region/Span，不另设公式策略系统。数学编码信息存入 unit.encoding 供任务 8 序列化。
 
-- [ ] **写失败用例。** `latex/nested-policy`、`latex/symbol-not-command`、`latex/unsupported`：
+- [x] **写失败用例。** `latex/nested-policy`、`latex/symbol-not-command`、`latex/unsupported`：
   ```ts
   equal(mathVisibleText('\\times'), '×');
   equal(eligibleMathInsideArgument('\\frac{甲}{乙}', '甲'), '甲');
   equal(eligibleChildTextWhenSelectingWholeFormula(), '');
   await rejectsCode(projectChosenUnknownMacro(), 'UNSUPPORTED_MATH');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- latex`；测试对真实 Markdown 数学区域取源码位置，不仅对脱离宿主的字符串 parser 断言。
-- [ ] **实现有限语法递归解析。** 显式读取命令、参数、花括号、上下标和 sqrt 可选指数；准确实现设计第 5.3 节全部文字/字体命令及符号表、标准希腊字母及其变体。提供命令→显示符号→可写编码的双向表；未知命令/environment 明确报错，不按其命令名字母转换。继承原选区与父区域决策，不能先裁剪到每个子区再判断 inside。
-- [ ] **验证。** `npm run test:cli -- latex`；公式内直接字符也能转换而非仅 text；嵌套分式/上下标/根指数、引用中公式、不同子区跨选、转义花括号；已跳过未知宏不导致整次失败，实际选择未知宏则全文不动。重叠/不平衡语法拒绝。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: map supported LaTeX through recursive regions"`。
+- [x] **运行红灯。** `npm run test:cli -- latex`；测试对真实 Markdown 数学区域取源码位置，不仅对脱离宿主的字符串 parser 断言。
+- [x] **实现有限语法递归解析。** 显式读取命令、参数、花括号、上下标和 sqrt 可选指数；准确实现设计第 5.3 节全部文字/字体命令及符号表、标准希腊字母及其变体。提供命令→显示符号→可写编码的双向表；未知命令/environment 明确报错，不按其命令名字母转换。继承原选区与父区域决策，不能先裁剪到每个子区再判断 inside。
+- [x] **验证。** `npm run test:cli -- latex`；公式内直接字符也能转换而非仅 text；嵌套分式/上下标/根指数、引用中公式、不同子区跨选、转义花括号；已跳过未知宏不导致整次失败，实际选择未知宏则全文不动。重叠/不平衡语法拒绝。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: map supported LaTeX through recursive regions"`。
 
 ### Task 8: 转换来源合成、严格等长与安全序列化
 

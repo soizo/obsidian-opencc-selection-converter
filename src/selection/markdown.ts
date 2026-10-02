@@ -2,14 +2,13 @@ import type { EditorState } from '@codemirror/state';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { PluginError } from '../errors';
 import { LIMITS } from '../limits';
+import { projectLatex } from './latex';
 import type { Projection, Region, RegionKind, RuleSettings, Span, VisibleUnit } from './types';
 
+import { regionAllows } from './types';
+export { regionAllows } from './types';
+
 type Token = Span & { name: string; tags: string[] };
-export function regionAllows(region: Region, selection: Span, rules: RuleSettings): boolean {
-  if (region.parent && !regionAllows(region.parent, selection, rules)) return false;
-  const policy = rules.regions[region.kind];
-  return policy === 'always' || (policy === 'inside' && region.source.from <= selection.from && selection.to <= region.source.to);
-}
 
 export function projectMarkdown(state: EditorState, selection: Span, rules: RuleSettings): Projection {
   const text = state.doc.toString();
@@ -152,7 +151,28 @@ export function projectMarkdown(state: EditorState, selection: Span, rules: Rule
     if (chainKey !== previousChain) flush();
     previousChain = chainKey;
     if (chain.some(item => !regionAllows(item, selection, rules))) { flush(); offset++; continue; }
-    if (chain.some(item => item.kind === 'inlineMath' || item.kind === 'blockMath')) throw new PluginError('UNSUPPORTED_MATH', '数学投影尚未启用。', { sourceSpan: { from: offset, to: offset + 1 } });
+    const mathRegion = chain.find(item => item.kind === 'inlineMath' || item.kind === 'blockMath');
+    if (mathRegion) {
+      flush();
+      let quoteDepth = 0;
+      for (let parent = mathRegion.parent; parent; parent = parent.parent) if (parent.kind === 'quote') quoteDepth++;
+      mathRegion.excluded = [];
+      for (let number = state.doc.lineAt(mathRegion.source.from).number; quoteDepth && number <= state.doc.lineAt(mathRegion.source.to).number; number++) {
+        const line = state.doc.line(number);
+        let prefix = 0;
+        for (let level = 0; level < quoteDepth; level++) {
+          const match = /^[ \t]{0,3}>[ \t]?/.exec(line.text.slice(prefix));
+          if (!match) break;
+          prefix += match[0].length;
+        }
+        if (prefix) mathRegion.excluded.push({ from: line.from, to: line.from + prefix });
+      }
+      const projected = projectLatex(text, mathRegion, selection, rules);
+      runs.push(...projected.runs);
+      regions.push(...projected.regions);
+      offset = mathRegion.source.to;
+      continue;
+    }
     if (text[offset] === '\n' || text[offset] === '\r') { flush(); offset++; continue; }
     const code = chain.some(item => item.kind === 'codeBlock' || item.kind === 'inlineCode');
     if (code && codeIndent[offset - start]) { offset++; continue; }

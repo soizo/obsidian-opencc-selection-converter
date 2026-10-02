@@ -7,12 +7,13 @@ import { resourcesTests } from './resources.test';
 import { cacheTests } from './cache.test';
 import { cacheRestartTests } from './cache-restart.test';
 import { markdownTests } from './markdown.test';
+import { latexTests } from './latex.test';
 
 export function attachCliTests(plugin: TestPlugin): void {
   Object.defineProperty(plugin, 'runCliSuite', { value: async (suite: string, runId: string, context: { fixtureOrigin?: string; restartTicket?: string } = {}) => {
     if (plugin.app.vault.getName() !== 'OpenCC-Selection-Converter-Test') throw new Error('Wrong test vault');
     if (!/^[a-f0-9-]{36}$/.test(runId)) throw new Error('Invalid test run ID');
-    const suites = { smoke: smokeTests(plugin), engine: engineTests(plugin), trace: traceTests(plugin), config: configTests(plugin), resources: resourcesTests(plugin, context.fixtureOrigin), cache: cacheTests(plugin), markdown: markdownTests(plugin) };
+    const suites = { smoke: smokeTests(plugin), engine: engineTests(plugin), trace: traceTests(plugin), config: configTests(plugin), resources: resourcesTests(plugin, context.fixtureOrigin), cache: cacheTests(plugin), markdown: markdownTests(plugin), latex: latexTests(plugin) };
     const tests = ['cache-restart-prepare', 'cache-restart'].includes(suite) ? cacheRestartTests(plugin, suite === 'cache-restart-prepare', context.fixtureOrigin, context.restartTicket) : suite === 'all' ? Object.values(suites).flat() : suites[suite as keyof typeof suites] ?? [];
     const checks: {name: string; pass: boolean; error?: string}[] = [];
     if (!tests.length) checks.push({ name: suite, pass: false, error: 'Unknown or empty suite' });

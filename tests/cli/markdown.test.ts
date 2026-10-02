@@ -73,7 +73,7 @@ export function markdownTests(plugin: TestPlugin) {
           equal(textOf(await project('甲https://example.com/软件', live)), ['甲']);
           equal(textOf(await project('正文[^注]\n[^注]: 脚注正文', live)), ['正文', ' 脚注正文']);
           await rejectsCode(project('<span>软件</span>', live), 'UNSUPPORTED_MARKDOWN');
-          await rejectsCode(project('$软件$', live), 'UNSUPPORTED_MATH');
+          equal(textOf(await project('$软件$', live)), ['软件']);
           equal(textOf(await project('正文 $软件$', live)), ['正文 ']);
         } },
         { name: `markdown/blocks-unicode/${mode}`, run: async () => {
