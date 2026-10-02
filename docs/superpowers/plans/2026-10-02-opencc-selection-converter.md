@@ -148,17 +148,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `parseConfig(text: string): ParsedConfig`（规范结构、原文与 JSON 路径）；`resolveDependencies(config: ParsedConfig, definition: SchemeDefinition): ResourcePlan`（配置来源、原引用、去重定位、virtual path、JSON 路径）；不在这些函数中联网。资源计划不得包含笔记内容。
 
-- [ ] **写失败用例。** `config/strict-known-fields`、`config/all-stages`、`config/paths`：
+- [x] **写失败用例。** `config/strict-known-fields`、`config/all-stages`、`config/paths`：
   ```ts
   equal(discoveredPaths(commentsAndTrailingCommaConfig), ['normalization/字典.txt','seg/词典.ocd2','../字典.txt']);
   equal(resolveVaultRef('配置/main.json', '../词典/繁体.txt'), '词典/繁体.txt');
   await rejectsCode(parseFixture({segmentation:{type:'jieba'}}), 'UNSUPPORTED_SEGMENTATION');
   await rejectsCode(resolveFixtureWithVaultEscape(), 'PATH_OUTSIDE_VAULT');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- config`；明确记录错误字段路径、根目录越界或漏掉 normalization 的失败。
-- [ ] **实现解析和定位。** 使用官方 Microsoft jsonc-parser 严格检查解析错误及未知/重复键；接受核心有效的缺省 name/segmentation/group policy，不机械照搬 schema 的更严 required 字段。遍历所有阶段与嵌套 dict，按设计支持集合校验；URL 用标准 URL，vault 使用明确归一化函数，不通过盲目字符串拼接或双重百分号解码。拒绝孤立代理项/NUL、凭据 URL、未知 scheme、跨来源隐式读取及超限深度。
-- [ ] **验证。** `npm run check && npm run test:cli -- config`；同名不同目录不碰撞；URL `../`、绝对 URL、覆盖、依赖基址和非 HTTPS 确认；资源数/深度/配置大小边界；text 与 binary 类型不靠扩展名猜；未知字段报 JSON 路径。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: validate OpenCC configs and resolve dependencies"`。
+- [x] **运行红灯。** `npm run test:cli -- config`；明确记录错误字段路径、根目录越界或漏掉 normalization 的失败。
+- [x] **实现解析和定位。** 使用官方 Microsoft jsonc-parser 严格检查解析错误及未知/重复键；接受核心有效的缺省 name/segmentation/group policy，不机械照搬 schema 的更严 required 字段。遍历所有阶段与嵌套 dict，按设计支持集合校验；URL 用标准 URL，vault 使用明确归一化函数，不通过盲目字符串拼接或双重百分号解码。拒绝孤立代理项/NUL、凭据 URL、未知 scheme、跨来源隐式读取及超限深度。
+- [x] **验证。** `npm run check && npm run test:cli -- config`；同名不同目录不碰撞；URL `../`、绝对 URL、覆盖、依赖基址和非 HTTPS 确认；资源数/深度/配置大小边界；text 与 binary 类型不靠扩展名猜；未知字段报 JSON 路径。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: validate OpenCC configs and resolve dependencies"`。
 
 ### Task 5: URL/vault 加载、完整快照与可恢复缓存
 

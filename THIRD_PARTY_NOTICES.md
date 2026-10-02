@@ -36,6 +36,14 @@ Source bundled by OpenCC under `deps/rapidjson-1.1.0`
 
 License: MIT. OpenCC's vendored headers carry MIT notices but omit the standalone license file. `engine/licenses/rapidjson.txt` is therefore copied from the author's official `Tencent/rapidjson` tag `v1.1.0`, not from an independent mirror. It also records upstream optional components; its JSON License applies to `bin/jsonchecker/`, which is not part of this engine. The vendored `rapidjson/uri.h` additionally carries Copyright IBM Corporation 2021 under MIT. RapidJSON is used by OpenCC and the bridge's JSON preflight.
 
+## jsonc-parser
+
+Copyright (c) Microsoft.
+
+Source: <https://github.com/microsoft/node-jsonc-parser>, fixed npm version 3.3.1.
+
+License: MIT; complete text in `engine/licenses/jsonc-parser.txt`, copied verbatim from the installed official package. Used by the host-side configuration validator, not as a replacement conversion engine.
+
 ## Emscripten
 
 Source: <https://github.com/emscripten-core/emsdk>

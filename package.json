@@ -21,5 +21,8 @@
     "obsidian": "1.13.1",
     "typescript": "5.9.3"
   },
-  "engines": {"node": ">=22"}
+  "engines": {"node": ">=22"},
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
+  }
 }

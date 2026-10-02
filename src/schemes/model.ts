@@ -1,3 +1,33 @@
+export type SchemeDefinition = {
+  id: string;
+  name: string;
+  source: { kind: 'url' | 'vault'; location: string };
+  dependencyBase?: string;
+  overrides?: Record<string, string>;
+};
+
+export type ParsedConfig = {
+  text: string;
+  data: Record<string, unknown>;
+  references: {
+    originalRef: string;
+    dictType: 'text' | 'ocd' | 'ocd2';
+    configPath: string;
+    path: (string | number)[];
+  }[];
+  warnings: string[];
+};
+
+export type ResourcePlan = {
+  definition: SchemeDefinition;
+  config: ParsedConfig;
+  resources: Omit<LoadedResource, 'bytes' | 'sha256'>[];
+  virtualConfigText: string;
+  warnings: string[];
+  httpUrls: string[];
+  requiresHttpConfirmation: boolean;
+};
+
 export type LoadedResource = {
   source: { kind: 'url' | 'vault'; location: string };
   originalRef: string;
