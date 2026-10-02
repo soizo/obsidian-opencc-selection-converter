@@ -1,2 +1,4 @@
 # Preserve upstream license texts verbatim, including their original whitespace.
 engine/licenses/* -whitespace
+# Unified diff blank context lines require their leading space.
+engine/patches/*.patch -whitespace

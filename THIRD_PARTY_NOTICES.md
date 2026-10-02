@@ -10,7 +10,7 @@ Source: <https://github.com/BYVoid/OpenCC>
 
 License: Apache License 2.0; complete text in `engine/licenses/opencc.txt`, copied from the pinned source.
 
-The project adds a separate C ABI bridge in `engine/bridge.cpp`; the fixed upstream checkout is not modified for the stage-2 build. A later tracing stage may apply the separately recorded patch under `engine/patches/`.
+The project adds a C ABI bridge and tracing/enumeration code in `engine/bridge.cpp` and `engine/trace.cpp`. The build applies `engine/patches/opencc-trace.patch` to an exported source copy: it adds an optional observer and a pre-append output budget to `Conversion.hpp` / `Conversion.cpp`, while retaining OpenCC's matching implementation. Both modified source files carry an explicit modification notice. The external upstream checkout is never modified.
 
 ## marisa-trie
 

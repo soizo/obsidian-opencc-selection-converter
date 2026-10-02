@@ -18,11 +18,14 @@ if ! git -C "$EMSDK" diff --quiet || ! git -C "$EMSDK" diff --cached --quiet; th
   exit 1
 fi
 # Use committed source, never patch or overwrite the external checkout.
-SOURCE="$ROOT/build/source/opencc-$opencc_commit"
+patch_file="$ROOT/engine/patches/opencc-trace.patch"
+patch_hash=$(node -e "const fs=require('node:fs'); const crypto=require('node:crypto'); process.stdout.write(crypto.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex'))" "$patch_file")
+SOURCE="$ROOT/build/source/opencc-$opencc_commit-$patch_hash"
 if [ ! -f "$SOURCE/.source-complete" ]; then
   [ ! -e "$SOURCE" ] || { echo 'Incomplete source extraction; inspect the build directory before retrying.' >&2; exit 1; }
   mkdir -p "$SOURCE"
   git -C "$OPENCC_SOURCE" archive "$opencc_commit" | tar -x -C "$SOURCE"
+  patch -p1 -d "$SOURCE" < "$patch_file"
   touch "$SOURCE/.source-complete"
 fi
 # This environment change lasts only for this build subprocess.
@@ -33,4 +36,5 @@ emcc --version | grep -F "$sdk_version"
 emcmake cmake -S "$ROOT/engine" -B "$ROOT/build/wasm" \
   -DOPENCC_SOURCE_DIR="$SOURCE" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+python3 "$ROOT/scripts/prepare-clangd.py"
 cmake --build "$ROOT/build/wasm" --target opencc_selection_engine --parallel 4

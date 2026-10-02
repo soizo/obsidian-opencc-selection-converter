@@ -1,4 +1,4 @@
-import type { EngineReply, EngineRequest, NativeModule } from './types';
+import type { EngineOutput, EngineReply, EngineRequest, LengthReport, MatchRecord, NativeModule, TraceResult } from './types';
 import { LIMITS } from '../limits';
 
 declare const __NATIVE_LOADER_SOURCE__: string;
@@ -72,7 +72,7 @@ function nativeError(mod: NativeModule): Error & { code: string } {
     raw = decoder.decode(nativeBytes(mod, pointer, length));
   } catch { /* Return the safe fallback without native payload. */ }
   const separator = raw.indexOf(':');
-  const code = separator > 0 ? raw.slice(0, separator) : 'ENGINE_ERROR';
+  const code = separator > 0 && /^[A-Z][A-Z_]+$/.test(raw.slice(0, separator)) ? raw.slice(0, separator) : 'ENGINE_ERROR';
   const message = separator > 0 ? raw.slice(separator + 1).trim() : raw;
   return failure(code, message || '离线引擎执行失败。');
 }
@@ -96,7 +96,52 @@ function encodeText(value: string): Uint8Array {
   return encoder.encode(value);
 }
 
-async function execute(request: EngineRequest): Promise<string | undefined> {
+function scalarLength(value: string): number {
+  let count = 0;
+  for (const _ of value) count++;
+  return count;
+}
+
+function parseReport(request: EngineRequest, text: string): TraceResult | LengthReport {
+  const invalid = () => failure('ENGINE_PROTOCOL', '离线引擎返回了无效的追踪或检查报告。');
+  let value: unknown;
+  try { value = JSON.parse(text); } catch { throw invalid(); }
+  if (!value || typeof value !== 'object') throw invalid();
+  if (request.operation === 'convert') {
+    const trace = value as TraceResult;
+    if (typeof trace.output !== 'string' || !Array.isArray(trace.origins) || !Array.isArray(trace.matches) ||
+        trace.origins.length !== scalarLength(trace.output)) throw invalid();
+    const inputLength = scalarLength(request.input ?? '');
+    let previous = 0;
+    for (const origin of trace.origins) {
+      if (!Number.isInteger(origin) || origin < previous || origin >= inputLength) throw invalid();
+      previous = origin;
+    }
+    const spanValid = (span: MatchRecord['inputScalar'], length: number) => span &&
+      Number.isInteger(span.from) && Number.isInteger(span.to) && span.from >= 0 && span.to >= span.from && span.to - span.from === length;
+    for (const match of trace.matches) {
+      if (!match || typeof match.stagePath !== 'string' || typeof match.dictPath !== 'string' || typeof match.selected !== 'string' ||
+          !Number.isInteger(match.inputLength) || match.inputLength < 1 || !Number.isInteger(match.outputLength) || match.outputLength < 0 ||
+          !spanValid(match.inputScalar, match.inputLength) || !spanValid(match.outputScalar, match.outputLength) ||
+          scalarLength(match.selected) !== match.outputLength) throw invalid();
+    }
+    return trace;
+  }
+  const report = value as LengthReport;
+  if (!['equal', 'risk', 'incomplete'].includes(report.status) || !Number.isInteger(report.checkedEntries) || report.checkedEntries < 0 ||
+      !Array.isArray(report.risks) || !Array.isArray(report.reasons) || report.reasons.some(reason => typeof reason !== 'string')) throw invalid();
+  if ((report.status === 'equal' && (report.risks.length || report.reasons.length)) ||
+      (report.status === 'risk' && (!report.risks.length || report.reasons.length)) ||
+      (report.status === 'incomplete' && !report.reasons.length)) throw invalid();
+  for (const risk of report.risks) {
+    if (!risk || typeof risk.stagePath !== 'string' || typeof risk.dictPath !== 'string' || typeof risk.key !== 'string' ||
+        typeof risk.defaultValue !== 'string' || scalarLength(risk.key) !== risk.inputLength ||
+        scalarLength(risk.defaultValue) !== risk.outputLength || risk.inputLength === risk.outputLength) throw invalid();
+  }
+  return { ...report, snapshotId: request.snapshot.id };
+}
+
+async function execute(request: EngineRequest): Promise<EngineOutput> {
   if (request.snapshot.resources.length > LIMITS.resources) throw failure('RESOURCE_LIMIT', '方案资源数量超过上限。');
   const config = encodeText(request.snapshot.virtualConfigText);
   const original = encodeText(request.snapshot.configText);
@@ -132,12 +177,23 @@ async function execute(request: EngineRequest): Promise<string | undefined> {
     handle = withBytes(mod, config, pointer => mod._occ_open(pointer, config.byteLength));
     if (handle < 1) throw nativeError(mod);
     if (request.operation === 'validate') return undefined;
-    const input = encodeText(request.input ?? '');
-    const status = withBytes(mod, input, pointer => mod._occ_convert(handle, pointer, input.byteLength));
+    let status: number;
+    if (request.operation === 'checkLengths') status = mod._occ_check_lengths(handle);
+    else {
+      const input = encodeText(request.input ?? '');
+      status = withBytes(mod, input, pointer => request.operation === 'convert'
+        ? mod._occ_trace(handle, pointer, input.byteLength)
+        : mod._occ_convert(handle, pointer, input.byteLength));
+    }
     if (status !== 0) throw nativeError(mod);
     const pointer = mod._occ_result_ptr();
     const length = mod._occ_result_len();
-    return decoder.decode(nativeBytes(mod, pointer, length));
+    const structured = request.operation === 'convert' || request.operation === 'checkLengths';
+    if (length > (structured ? LIMITS.traceBytes : LIMITS.outputBytes)) {
+      throw failure(structured ? 'TRACE_LIMIT' : 'OUTPUT_LIMIT', '离线引擎输出超过大小上限。');
+    }
+    const text = decoder.decode(nativeBytes(mod, pointer, length));
+    return structured ? parseReport(request, text) : text;
   } finally {
     if (handle > 0) {
       mod._occ_close(handle);

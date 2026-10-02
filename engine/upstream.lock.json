@@ -9,5 +9,6 @@
     "version": "4.0.15",
     "commit": "389a68bc35dcff7ebae4614e1615099dafda00d1"
   },
-  "bridgeAbi": 1
+  "bridgeAbi": 2,
+  "patches": ["engine/patches/opencc-trace.patch"]
 }

@@ -1,14 +1,14 @@
 import { PluginError } from '../errors';
 import { LIMITS } from '../limits';
 import type { Snapshot } from '../schemes/model';
-import type { EngineReply, EngineRequest } from './types';
+import type { EngineOutput, EngineReply, EngineRequest, LengthReport, TraceResult } from './types';
 
 declare const __WORKER_SOURCE__: string;
 
 type Job = {
   request: EngineRequest;
   signal: AbortSignal;
-  resolve: (output: string | undefined) => void;
+  resolve: (output: EngineOutput) => void;
   reject: (error: PluginError) => void;
   abort: () => void;
 };
@@ -33,7 +33,26 @@ export class EngineClient {
     return output;
   }
 
-  private request(request: Omit<EngineRequest, 'id'>, signal: AbortSignal): Promise<string | undefined> {
+  async convert(snapshot: Snapshot, input: string, signal: AbortSignal): Promise<TraceResult> {
+    const output = await this.request({ operation: 'convert', snapshot, input }, signal);
+    if (!output || typeof output !== 'object' || !('output' in output)) throw new PluginError('ENGINE_PROTOCOL', '引擎没有返回有效追踪。');
+    return output;
+  }
+
+  async checkLengths(snapshot: Snapshot, signal: AbortSignal): Promise<LengthReport> {
+    try {
+      const output = await this.request({ operation: 'checkLengths', snapshot }, signal);
+      if (!output || typeof output !== 'object' || !('status' in output) || output.snapshotId !== snapshot.id) {
+        throw new PluginError('ENGINE_PROTOCOL', '引擎没有返回有效的等长性报告。');
+      }
+      return output;
+    } catch (error) {
+      if (!(error instanceof PluginError) || error.code === 'CANCELLED' || error.code === 'ENGINE_DISPOSED') throw error;
+      return { snapshotId: snapshot.id, status: 'incomplete', checkedEntries: 0, risks: [], reasons: [`${error.code}: ${error.message}`] };
+    }
+  }
+
+  private request(request: Omit<EngineRequest, 'id'>, signal: AbortSignal): Promise<EngineOutput> {
     if (this.disposed) return Promise.reject(new PluginError('ENGINE_DISPOSED', '引擎已关闭。'));
     if (signal.aborted) return Promise.reject(new PluginError('CANCELLED', '操作已取消。'));
     return new Promise((resolve, reject) => {
@@ -86,7 +105,7 @@ export class EngineClient {
     }
   }
 
-  private finish(error?: PluginError, output?: string): void {
+  private finish(error?: PluginError, output?: EngineOutput): void {
     const job = this.active;
     if (!job) return;
     clearTimeout(this.timer);

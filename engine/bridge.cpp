@@ -5,7 +5,7 @@
 #include <string_view>
 #include <emscripten/heap.h>
 #include <rapidjson/document.h>
-#include <rapidjson/memorystream.h>
+#include "trace.hpp"
 #include "Config.hpp"
 #include "Converter.hpp"
 #include "Exception.hpp"
@@ -19,26 +19,18 @@ uint32_t currentHandle = 0;
 uint32_t lastHandle = 0;
 std::string result;
 std::string error;
+std::string configText;
 
 std::string_view input(uint32_t ptr, uint32_t len) {
   const size_t heap = emscripten_get_heap_size();
   if ((len && !ptr) || ptr > heap || len > heap - ptr) {
     throw std::runtime_error("INVALID_TEXT: Invalid input memory range");
   }
-  return len ? std::string_view(reinterpret_cast<const char*>(ptr), len) : std::string_view();
+  return len ? std::string_view(reinterpret_cast<const char*>(ptr), len) : std::string_view("", 0);
 }
 
 void validateUtf8(std::string_view text, size_t maxScalars = std::numeric_limits<size_t>::max()) {
-  if (text.empty()) return;
-  rapidjson::MemoryStream stream(text.data(), text.size());
-  size_t count = 0;
-  while (stream.Tell() < text.size()) {
-    unsigned scalar = 0;
-    if (!rapidjson::UTF8<>::Decode(stream, &scalar) || scalar == 0) {
-      throw std::runtime_error("INVALID_TEXT: Invalid UTF-8 or NUL is not supported");
-    }
-    if (++count > maxScalars) throw std::runtime_error("INPUT_LIMIT: Selection exceeds the Unicode scalar limit");
-  }
+  selection::CountScalars(text, maxScalars);
 }
 
 void validateJson(const rapidjson::Value& value, unsigned depth = 0) {
@@ -55,12 +47,32 @@ void validateJson(const rapidjson::Value& value, unsigned depth = 0) {
 }
 
 void resetResult() { result.clear(); error.clear(); }
+
+template <typename Operation>
+int32_t run(uint32_t handle, Operation operation) {
+  resetResult();
+  try {
+    if (!converter || handle != currentHandle) throw std::runtime_error("ENGINE_ERROR: Invalid converter handle");
+    result = operation();
+    return 0;
+  } catch (const opencc::Exception&) {
+    // Never echo selected text through a native exception message.
+    error = "ENGINE_ERROR: OpenCC operation failed";
+  } catch (const std::exception& exception) {
+    error = exception.what();
+  } catch (...) {
+    error = "ENGINE_ERROR: Unknown native operation failure";
+  }
+  result.clear();
+  return -1;
+}
 } // namespace
 
 extern "C" {
 int32_t occ_open(uint32_t ptr, uint32_t len) {
   resetResult();
   converter.reset();
+  configText.clear();
   currentHandle = 0;
   try {
     if (len > CONFIG_LIMIT) throw std::runtime_error("CONFIG_LIMIT: Configuration exceeds the byte limit");
@@ -80,7 +92,8 @@ int32_t occ_open(uint32_t ptr, uint32_t len) {
       }
     }
     opencc::Config config;
-    converter = config.NewFromString(std::string(json), std::string("/snapshot"));
+    configText.assign(json);
+    converter = config.NewFromString(configText, std::string("/snapshot"));
     if (!converter) throw std::runtime_error("ENGINE_ERROR: OpenCC did not create a converter");
     lastHandle = lastHandle % static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) + 1;
     currentHandle = lastHandle;
@@ -97,26 +110,26 @@ int32_t occ_open(uint32_t ptr, uint32_t len) {
 }
 
 int32_t occ_convert(uint32_t handle, uint32_t ptr, uint32_t len) {
-  resetResult();
-  try {
-    if (!converter || handle != currentHandle) throw std::runtime_error("ENGINE_ERROR: Invalid converter handle");
+  return run(handle, [&] {
     const auto text = input(ptr, len);
     validateUtf8(text, INPUT_SCALARS);
-    result = converter->Convert(text);
-    // Task 3 adds generation-time budgets to the shared native matching loop.
-    if (result.size() > OUTPUT_LIMIT) throw std::runtime_error("OUTPUT_LIMIT: Converted output exceeds the byte limit");
-    validateUtf8(result);
-    return 0;
-  } catch (const opencc::Exception&) {
-    // Never echo selected text through a native exception message.
-    error = "ENGINE_ERROR: OpenCC conversion failed";
-  } catch (const std::exception& exception) {
-    error = exception.what();
-  } catch (...) {
-    error = "ENGINE_ERROR: Unknown conversion failure";
-  }
-  result.clear();
-  return -1;
+    auto converted = converter->Convert(text);
+    if (converted.size() > OUTPUT_LIMIT) throw std::runtime_error("OUTPUT_LIMIT: Converted output exceeds the byte limit");
+    validateUtf8(converted);
+    return converted;
+  });
+}
+
+int32_t occ_trace(uint32_t handle, uint32_t ptr, uint32_t len) {
+  return run(handle, [&] {
+    const auto text = input(ptr, len);
+    validateUtf8(text, INPUT_SCALARS);
+    return selection::Trace(converter, configText, text);
+  });
+}
+
+int32_t occ_check_lengths(uint32_t handle) {
+  return run(handle, [&] { return selection::CheckLengths(converter, configText); });
 }
 
 uint32_t occ_result_ptr() { return reinterpret_cast<uintptr_t>(result.data()); }
@@ -128,6 +141,7 @@ void occ_close(uint32_t handle) {
   if (handle == currentHandle) {
     converter.reset();
     currentHandle = 0;
+    configText.clear();
     result.clear();
     error.clear();
   }

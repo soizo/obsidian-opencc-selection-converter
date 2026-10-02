@@ -122,7 +122,7 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 - [x] **运行红灯。** `npm run test:cli -- engine`；正确识别未实现的 engine endpoint，不以下载失败替代行为失败。
 - [x] **实现真实引擎。** 克隆固定源码/emsdk 到规定目录，构建 browser/worker-only ESM；编译异常捕获和内存上限，不启用 Emscripten 动态链接；桥接预检再次拒绝非 mmseg 分词，不能让宿主漏检变成任意插件加载。桥接严格检查 UTF-8/NUL、显式字节长度及错误；Worker 内禁用网络，传入 wasmBinary/locateFile，不依赖 Electron 的 process 探测。本任务先验证固定 WASM 内存上限及返回结果大小；任务 3 在共享匹配循环中补齐生成过程预算，在此之前不宣称超限保护全部完成。实现单 Worker 串行队列、job ID/实例 generation、任务开始后的 watchdog 和 signal 取消；快照字节不能因 transfer 而让后续重载失效。记录许可。
 - [x] **验证。** `npm run build:engine && npm run check && npm run test:cli -- engine`；覆盖 normalization、mmseg/缺省、两种 group 策略、多候选、混合换行、四种词典、破损词典；50,000 字不切片、不触发栈越界。比较实例销毁前后句柄数量，错误后能重新加载。
-- [ ] **提交。** stage 本任务源码/fixture/来源记录，不提交克隆目录和 SDK；`git commit -m "feat: run native OpenCC offline in a browser worker"`。
+- [x] **提交。** stage 本任务源码/fixture/来源记录，不提交克隆目录和 SDK；`git commit -m "feat: run native OpenCC offline in a browser worker"`。
 
 ### Task 3: 原生逐次匹配追踪与完整词条检查
 
@@ -130,17 +130,17 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** 产出 `EngineClient.convert(snapshot:Snapshot, input:string, signal:AbortSignal): Promise<TraceResult>`、`checkLengths(snapshot:Snapshot, signal:AbortSignal): Promise<LengthReport>`；新增对应 C ABI `occ_trace(handle,inputPtr,len)`、`occ_check_lengths(handle)`，复用结果缓冲与错误协议。
 
-- [ ] **写失败用例。** `trace/cancelled-lengths`、`trace/normalization-origins`、`trace/group-policy`、`trace/unicode`、`trace/enumeration`：
+- [x] **写失败用例。** `trace/cancelled-lengths`、`trace/normalization-origins`、`trace/group-policy`、`trace/unicode`、`trace/enumeration`：
   ```ts
   const r = await traced('甲→甲乙;丙丁→丙', '甲丙丁');
   equal(r.output, '甲乙丙'); ok(r.matches.some(m => m.inputLength !== m.outputLength));
   equal((await traced('𠀀→𠀁', '𠀀')).origins, [0]);
   equal((await scan('binary-with-longer-default')).status, 'risk');
   ```
-- [ ] **运行红灯。** `npm run test:cli -- trace`；应因无追踪/枚举能力或错误来源映射失败，不能只因 fixture 没有部署失败。
-- [ ] **实现同一原生匹配循环的观测。** 对 `Conversion.hpp/.cpp` 的真实 AppendConverted 路径增加可选 observer/预算钩子；普通与追踪调用共享匹配实现。使用公开 GetSegmentation/GetConversionChain/GetConversions/GetNormalizationConverter 遍历配置，保留 segment 边界及阶段偏移。使用 GetLexicon/GetDictGroupItems 枚举叶词典，配置根/文件位置映射独立保存；禁止 `#define private public` 或复制一套 JS 匹配逻辑。原生补丁若必须扩展到其他源文件，逐项记录原因而非绕过接口。
-- [ ] **验证。** `npm run build:engine && npm run test:cli -- trace`；追踪输出与 convertPlain 对每个官方/自订 fixture 相等；检查二进制词典、不可达风险条目、默认候选、分词-only 词典不误判；normalization 变长后再次分词来源正确；输出/追踪预算在生成中止住，部分检查只能 incomplete。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: trace native matches and inspect dictionary lengths"`。
+- [x] **运行红灯。** `npm run test:cli -- trace`；应因无追踪/枚举能力或错误来源映射失败，不能只因 fixture 没有部署失败。
+- [x] **实现同一原生匹配循环的观测。** 对 `Conversion.hpp/.cpp` 的真实 AppendConverted 路径增加可选 observer/预算钩子；普通与追踪调用共享匹配实现。使用公开 GetSegmentation/GetConversionChain/GetConversions/GetNormalizationConverter 遍历配置，保留 segment 边界及阶段偏移。使用 GetLexicon/GetDictGroupItems 枚举叶词典，配置根/文件位置映射独立保存；禁止 `#define private public` 或复制一套 JS 匹配逻辑。原生补丁若必须扩展到其他源文件，逐项记录原因而非绕过接口。
+- [x] **验证。** `npm run build:engine && npm run test:cli -- trace`；追踪输出与 convertPlain 对每个官方/自订 fixture 相等；检查二进制词典、不可达风险条目、默认候选、分词-only 词典不误判；normalization 变长后再次分词来源正确；输出/追踪预算在生成中止住，部分检查只能 incomplete。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: trace native matches and inspect dictionary lengths"`。
 
 ### Task 4: 配置验证与完整依赖定位
 

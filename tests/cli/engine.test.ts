@@ -14,7 +14,7 @@ import twPhrases from '../fixtures/opencc/s2twp/TWPhrases.ocd2';
 import twVariants from '../fixtures/opencc/s2twp/TWVariants.ocd2';
 import twVariantPhrases from '../fixtures/opencc/s2twp/TWVariantsPhrases.ocd2';
 
-async function snapshot(config: unknown, files: Record<string, string> = {}): Promise<Snapshot> {
+export async function snapshot(config: unknown, files: Record<string, string> = {}): Promise<Snapshot> {
   const text = JSON.stringify(config);
   const resources = await Promise.all(Object.entries(files).map(async ([file, content]) => {
     const bytes = new TextEncoder().encode(content);
@@ -32,9 +32,26 @@ async function snapshot(config: unknown, files: Record<string, string> = {}): Pr
   };
 }
 
-type EngineEndpoint = Pick<EngineClient, 'validate' | 'convertPlain'>;
+export async function officialSnapshot(): Promise<Snapshot> {
+  const prepared = await snapshot(s2twp);
+  for (const [file, bytes] of [
+    ['CJK_Compatibility_Ideographs.ocd2', compatibility],
+    ['STCharacters.ocd2', stCharacters],
+    ['STPhrases.ocd2', stPhrases],
+    ['STPhrases_GeneratedFromRegionalPhrases.ocd2', generatedPhrases],
+    ['TWPhrases.ocd2', twPhrases],
+    ['TWVariants.ocd2', twVariants],
+    ['TWVariantsPhrases.ocd2', twVariantPhrases],
+  ] as const) prepared.resources.push({
+    source: { kind: 'vault', location: `fixtures/s2twp/${file}` }, originalRef: file,
+    virtualPath: file, configPaths: [], dictType: 'ocd2', bytes: bytes.slice(), sha256: 'verified-fixture',
+  });
+  return prepared;
+}
 
-function engine(plugin: TestPlugin): EngineEndpoint {
+type EngineEndpoint = Pick<EngineClient, 'validate' | 'convertPlain' | 'convert' | 'checkLengths'>;
+
+export function engine(plugin: TestPlugin): EngineEndpoint {
   const endpoint = (plugin as TestPlugin & {engine?: EngineEndpoint}).engine;
   ok(endpoint, 'Native engine endpoint not implemented');
   return endpoint;
@@ -75,19 +92,7 @@ export function engineTests(plugin: TestPlugin) {
       }
     } },
     { name: 'engine/official-s2twp', run: async () => {
-      const prepared = await snapshot(s2twp);
-      for (const [file, bytes] of [
-        ['CJK_Compatibility_Ideographs.ocd2', compatibility],
-        ['STCharacters.ocd2', stCharacters],
-        ['STPhrases.ocd2', stPhrases],
-        ['STPhrases_GeneratedFromRegionalPhrases.ocd2', generatedPhrases],
-        ['TWPhrases.ocd2', twPhrases],
-        ['TWVariants.ocd2', twVariants],
-        ['TWVariantsPhrases.ocd2', twVariantPhrases],
-      ] as const) prepared.resources.push({
-        source: { kind: 'vault', location: `fixtures/s2twp/${file}` }, originalRef: file,
-        virtualPath: file, configPaths: [], dictType: 'ocd2', bytes: bytes.slice(), sha256: 'verified-fixture',
-      });
+      const prepared = await officialSnapshot();
       equal(await engine(plugin).convertPlain(prepared, '服务器软件', new AbortController().signal), '伺服器軟體');
     } },
     { name: 'engine/long-input', run: async () => {

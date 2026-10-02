@@ -1,0 +1,94 @@
+--- a/src/Conversion.hpp
++++ b/src/Conversion.hpp
+@@ -18,6 +18,8 @@
+ 
+ #pragma once
+ 
++// Modified by OpenCC Selection Converter: optional native match observer.
++#include <functional>
+ #include <string_view>
+ 
+ #include "Common.hpp"
+@@ -63,7 +65,10 @@
+    * @param phrase UTF-8 text; need not be null-terminated.
+    * @param output Destination buffer; content is appended, not replaced.
+    */
+-  void AppendConverted(std::string_view phrase, std::string* output) const;
++  using Observer = std::function<void(std::string_view input,
++                                      std::string_view output, bool matched)>;
++  void AppendConverted(std::string_view phrase, std::string* output,
++                       const Observer* observer = nullptr) const;
+ 
+   /**
+    * Converts @p phrase and appends the result to @p output.
+--- a/src/Conversion.cpp
++++ b/src/Conversion.cpp
+@@ -16,6 +16,10 @@
+  * limitations under the License.
+  */
+ 
++// Modified by OpenCC Selection Converter: observe actual matches and bound
++// output BEFORE allocation/append, for both ordinary and traced conversion.
++#include <algorithm>
++#include <stdexcept>
+ #include "Conversion.hpp"
+ #include "PrefixMatch.hpp"
+ #include "Segments.hpp"
+@@ -27,12 +31,18 @@
+     : dict(_dict), prefixMatch(new PrefixMatch(_dict)) {}
+ 
+ void Conversion::AppendConverted(std::string_view phrase,
+-                                  std::string* output) const {
++                                  std::string* output,
++                                  const Observer* observer) const {
+   if (phrase.empty()) {
+     return;
+   }
++  constexpr size_t outputLimit = 8 * 1024 * 1024;
++  if (output->size() > outputLimit) {
++    throw std::runtime_error("OUTPUT_LIMIT: Native stage output exceeds budget");
++  }
+   const size_t phraseLength = phrase.size();
+-  output->reserve(output->size() + phraseLength + phraseLength / 5);
++  output->reserve(std::min(outputLimit,
++                          output->size() + phraseLength + phraseLength / 5));
+ 
+   const char* phraseData = phrase.data();
+   const char* phraseEnd = phraseData + phraseLength;
+@@ -41,6 +51,7 @@
+     const PrefixMatchView matched =
+         prefixMatch->MatchPrefixView(pstr, remainingLength);
+     size_t matchedLength;
++    std::string_view replacement;
+     if (!matched.matched) {
+       matchedLength =
+           UTF8Util::NextIdeographicDescriptionSequenceLength(pstr,
+@@ -56,13 +67,26 @@
+       // are consumed with a single bulk scan and one append.
+       matchedLength += prefixMatch->SkipUnmatchable(
+           pstr + matchedLength, remainingLength - matchedLength);
+-      output->append(pstr, matchedLength);
++      replacement = std::string_view(pstr, matchedLength);
+     } else {
+       matchedLength = matched.keyLength;
+       if (matchedLength > remainingLength) {
+         matchedLength = remainingLength;
+       }
+-      output->append(matched.value.data(), matched.value.size());
++      replacement = matched.value;
++    }
++    if (matchedLength == 0) {
++      throw std::runtime_error("ENGINE_ERROR: Empty dictionary match");
++    }
++    if (replacement.size() > outputLimit - output->size()) {
++      throw std::runtime_error("OUTPUT_LIMIT: Native stage output exceeds budget");
++    }
++    if (observer) {
++      (*observer)(std::string_view(pstr, matchedLength), replacement,
++                  matched.matched);
++    }
++    if (!replacement.empty()) {
++      output->append(replacement.data(), replacement.size());
+     }
+     pstr += matchedLength;
+   }
