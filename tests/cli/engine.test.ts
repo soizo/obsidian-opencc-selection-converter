@@ -49,7 +49,7 @@ export async function officialSnapshot(): Promise<Snapshot> {
   return prepared;
 }
 
-type EngineEndpoint = Pick<EngineClient, 'validate' | 'convertPlain' | 'convert' | 'checkLengths'>;
+type EngineEndpoint = EngineClient;
 
 export function engine(plugin: TestPlugin): EngineEndpoint {
   const endpoint = (plugin as TestPlugin & {engine?: EngineEndpoint}).engine;

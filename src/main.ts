@@ -2,13 +2,16 @@ import { MarkdownView, Notice, Plugin } from 'obsidian';
 import { PluginError } from './errors';
 import { captureTarget, editorExtension } from './selection/editor';
 import { EngineClient } from './engine/client';
+import { SchemeStore } from './schemes/store';
 
 declare const __TEST__: boolean;
 
 export default class OpenCCSelectionConverter extends Plugin {
   readonly engine = new EngineClient();
+  readonly store = new SchemeStore(this.app, this.engine);
 
   async onload(): Promise<void> {
+    await this.store.load();
     this.registerEditorExtension(editorExtension);
     this.addCommand({
       id: 'convert-default',

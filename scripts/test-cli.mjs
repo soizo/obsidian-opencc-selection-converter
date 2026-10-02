@@ -6,6 +6,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { startFixtureServer } from '../tests/fixture-server.mjs';
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -13,6 +14,7 @@ const vaultName = 'OpenCC-Selection-Converter-Test';
 const expectedVault = path.join(homedir(), 'Desktop/PlayGround', vaultName);
 const pluginId = 'opencc-selection-converter';
 const suites = process.argv.slice(2).length ? process.argv.slice(2) : ['all'];
+let fixture;
 
 async function exists(file) {
   try { await stat(file); return true; }
@@ -96,11 +98,19 @@ async function main() {
   await cli('plugin:enable', `id=${pluginId}`, 'filter=community');
   await cli('plugin:reload', `id=${pluginId}`);
 
+  if (suites.some(suite => ['all', 'resources', 'cache'].includes(suite))) fixture = await startFixtureServer();
   let passed = 1;
   let failed = 0;
-  for (const suite of suites) {
+  const context = { fixtureOrigin: fixture?.origin, restartTicket: randomUUID() };
+  const execution = [...suites, ...(suites.some(suite => ['all', 'cache'].includes(suite)) ? ['cache-restart-prepare', 'cache-restart'] : [])];
+  for (const suite of execution) {
+    if (suite === 'cache-restart') {
+      await fixture.close();
+      fixture = undefined;
+      await cli('plugin:reload', `id=${pluginId}`);
+    }
     const runId = randomUUID();
-    const output = await evaluate(`(async()=>{const p=app.plugins.plugins['${pluginId}']; if(!p?.runCliSuite) throw new Error('Test plugin not loaded'); await p.runCliSuite(${JSON.stringify(suite)},${JSON.stringify(runId)}); return 'report:'+${JSON.stringify(runId)}})()`);
+    const output = await evaluate(`(async()=>{const p=app.plugins.plugins['${pluginId}']; if(!p?.runCliSuite) throw new Error('Test plugin not loaded'); await p.runCliSuite(${JSON.stringify(suite)},${JSON.stringify(runId)},${JSON.stringify(context)}); return 'report:'+${JSON.stringify(runId)}})()`);
     const reportPath = path.join(vault, '.opencc-test-results', `${runId}.json`);
     if (!await exists(reportPath)) throw new Error(`Missing fresh CLI report: ${output}`);
     await ensureInside(vault, reportPath);
@@ -119,3 +129,4 @@ async function main() {
 
 try { await main(); }
 catch (error) { console.error(String(error)); process.exitCode = 1; }
+finally { if (fixture) await fixture.close(); }

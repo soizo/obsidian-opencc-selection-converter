@@ -187,5 +187,5 @@ export function resolveDependencies(config: ParsedConfig, definition: SchemeDefi
     for (const key of reference.path.slice(0, -1)) parent = (parent as Record<string | number, unknown>)[key];
     (parent as Record<string | number, unknown>)[reference.path.at(-1)!] = resource.virtualPath;
   }
-  return { definition, config, resources, virtualConfigText: JSON.stringify(data), warnings: [...config.warnings], httpUrls: [...httpUrls], requiresHttpConfirmation: httpUrls.size > 0 };
+  return { definition, configSource: { kind: source.kind, location }, config, resources, virtualConfigText: JSON.stringify(data), warnings: [...config.warnings], httpUrls: [...httpUrls], requiresHttpConfirmation: httpUrls.size > 0 };
 }

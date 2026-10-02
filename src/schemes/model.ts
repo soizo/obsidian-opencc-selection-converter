@@ -1,9 +1,21 @@
+import type { PluginError } from '../errors';
+
+export type SchemeStatus = {
+  kind: 'unloaded' | 'loading' | 'ready' | 'dirty' | 'stale' | 'unavailable';
+  error?: PluginError;
+  warnings: string[];
+  snapshotId?: string;
+  lastSuccess?: number;
+};
+
 export type SchemeDefinition = {
   id: string;
   name: string;
   source: { kind: 'url' | 'vault'; location: string };
   dependencyBase?: string;
   overrides?: Record<string, string>;
+  /** Exact HTTP URLs explicitly approved by the user, not an origin-wide grant. */
+  approvedHttpUrls?: string[];
 };
 
 export type ParsedConfig = {
@@ -18,8 +30,12 @@ export type ParsedConfig = {
   warnings: string[];
 };
 
+export type SourceVersion = { path: string; mtime: number; size: number };
+
 export type ResourcePlan = {
   definition: SchemeDefinition;
+  configSource: LoadedResource['source'];
+  sourceVersions?: SourceVersion[];
   config: ParsedConfig;
   resources: Omit<LoadedResource, 'bytes' | 'sha256'>[];
   virtualConfigText: string;
@@ -48,4 +64,5 @@ export type Snapshot = {
   virtualConfigText: string;
   resources: LoadedResource[];
   createdAt: number;
+  sourceVersions?: SourceVersion[];
 };

@@ -166,17 +166,19 @@ OpenCC 1.4.2 标签已解析到提交 `025f371dc76b598d77384fbdab90c937471844d8`
 
 **Interfaces:** `prepareScheme(app:App, definition:SchemeDefinition, signal:AbortSignal): Promise<ResourcePlan>` 只读取配置并返回资源计划；`loadPrepared(app:App, plan:ResourcePlan, engine:EngineClient, signal:AbortSignal): Promise<Snapshot>` 在确认后读取依赖、校验并生成快照。`SchemeStore(app:App, engine:EngineClient)` 提供 `load():Promise<void>`、`activate(definition:SchemeDefinition,snapshot:Snapshot):Promise<void>`、`getActive(id:string):Promise<Snapshot>`、`remove(id:string):Promise<void>`、`saveRules(rules:RuleSettings):Promise<void>`、`getRules():RuleSettings`、`getDefinitions():readonly SchemeDefinition[]`、`getStatus(id:string):SchemeStatus`、`getDefaultId():string|null`、`setDefault(id:string|null):Promise<void>`，以及 `saveDraft(definition:SchemeDefinition):Promise<void>`、`getDraft(id:string):SchemeDefinition|null`、`setStatus(id:string,status:SchemeStatus):Promise<void>`。SchemeStatus 定义为 `{kind:'unloaded'|'loading'|'ready'|'dirty'|'stale'|'unavailable',error?:PluginError,warnings:string[],snapshotId?:string,lastSuccess?:number}`；对应设计六类状态，不把草稿当活动定义。
 
-- [ ] **写失败用例。** `cache/refresh-fallback`、`cache/interrupted-commit`、`cache/source-identity`、`resources/no-note-upload`：
+- [x] **写失败用例。** `cache/refresh-fallback`、`cache/interrupted-commit`、`cache/source-identity`、`resources/no-note-upload`：
   ```ts
   equal(await convertAfterFailedRefresh('软件'), '軟體');
   equal(await recoveredSnapshotAfterTruncatedCommit(), previousSnapshotId);
   equal(await activeSourceAfterFailedSourceEdit(), previousSourceKey);
   equal(await fixtureRequestsDuringCachedConversion('独特正文哨兵'), []);
   ```
-- [ ] **运行红灯。** `npm run test:cli -- resources cache`；本地 fixture server 只绑定 loopback 且只服务白名单路径，真实 Obsidian 请求经过确认的测试 HTTP 来源。驱动 finally 关闭服务器。
-- [ ] **实现资源与提交协议。** requestUrl/Vault Adapter 读取，任务 token 使超时/取消后的迟到结果无效；WebCrypto 哈希资源和 sourceKey。快照目录先写资源、最后完整标记、再写活动元数据；恢复扫描已提交且身份/哈希匹配的目录，保留当前与上一版。内存 snapshot 只供一次队列任务取用，切换时释放未用资源引用；升级引擎重新 validate。元数据用双版本提交记录避免方案/默认配置自身的半写入；它不是数据库或通用存储层。编辑或首次添加先 saveDraft，加载阶段更新 status；activate 成功才更新活动定义并清除草稿，失败记录不会替换活动来源。仅改名称时沿用 sourceKey 相同的快照，不重新下载。
-- [ ] **验证。** `npm run test:cli -- resources cache`；真实文件更新、删除、rename 标脏，显式 reload 后生效；restart/reload 后断网读缓存；hash 损坏/标记截断/写入中止不覆盖旧版；删除方案不删源文件。测试 Unicode/空格文件名、百分号作为普通 vault 文件名、编码路径与 `../` 边界；源文件必须由宿主 vault 文件索引识别，不通过任意 adapter 路径读取系统文件。归一化不能证明符号链接的真实磁盘隔离，不冒称操作系统沙箱；若宿主允许越界链接且无法识别，记录实际证据并停下确认限制，不能引入仅桌面可用的 Node realpath 冒充跨平台解决。记录请求 API 无流式硬限额/最终重定向 URL 时的明确限制。
-- [ ] **提交。** stage 本任务 Files，`git commit -m "feat: load schemes with durable validated snapshots"`。
+- [x] **运行红灯。** `npm run test:cli -- resources cache`；本地 fixture server 只绑定 loopback 且只服务白名单路径，真实 Obsidian 请求经过确认的测试 HTTP 来源。驱动 finally 关闭服务器。
+- [x] **实现资源与提交协议。** requestUrl/Vault Adapter 读取，任务 token 使超时/取消后的迟到结果无效；WebCrypto 哈希资源和 sourceKey。快照目录先写资源、最后完整标记、再写活动元数据；恢复扫描已提交且身份/哈希匹配的目录，保留当前与上一版。内存 snapshot 只供一次队列任务取用，切换时释放未用资源引用；升级引擎重新 validate。元数据用双版本提交记录避免方案/默认配置自身的半写入；它不是数据库或通用存储层。编辑或首次添加先 saveDraft，加载阶段更新 status；activate 成功才更新活动定义并清除草稿，失败记录不会替换活动来源。仅改名称时沿用 sourceKey 相同的快照，不重新下载。
+- [x] **验证。** `npm run test:cli -- resources cache`；真实文件更新、删除、rename 标脏，显式 reload 后生效；restart/reload 后断网读缓存；hash 损坏/标记截断/写入中止不覆盖旧版；删除方案不删源文件。测试 Unicode/空格文件名、百分号作为普通 vault 文件名、编码路径与 `../` 边界；源文件必须由宿主 vault 文件索引识别，不通过任意 adapter 路径读取系统文件。归一化不能证明符号链接的真实磁盘隔离，不冒称操作系统沙箱；若宿主允许越界链接且无法识别，记录实际证据并停下确认限制，不能引入仅桌面可用的 Node realpath 冒充跨平台解决。记录请求 API 无流式硬限额/最终重定向 URL 时的明确限制。
+- [x] **提交。** stage 本任务 Files，`git commit -m "feat: load schemes with durable validated snapshots"`。
+
+执行澄清：用户要求本地文件放入库内即可读取，不要求物理磁盘沙箱。按宿主文件索引处理；链接探针记录在 `docs/probes/vault-symlink-boundary.md`。缓存仅恢复已发布元数据引用的当前/上一版，不将未发布孤立目录自动升级为活动方案；未知/损坏遗留不批量清除。
 
 ### Task 6: Markdown 可见文字与递归区域投影
 
