@@ -3,6 +3,7 @@ export const LIMITS = {
   dependencyBytes: 64 * 1024 * 1024,
   snapshotBytes: 128 * 1024 * 1024,
   resources: 256,
+  chainSteps: 16,
   configDepth: 32,
   selectionScalars: 200_000,
   outputBytes: 8 * 1024 * 1024,

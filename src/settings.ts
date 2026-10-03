@@ -1,5 +1,5 @@
 import { ButtonComponent, Menu, Modal, Notice, PluginSettingTab, type App, type Plugin, type Setting, type SettingDefinitionItem } from 'obsidian';
-import { SchemeEditModal, confirmAction, safeError, safeLocation, safeText, type SchemeHost } from './scheme-modal';
+import { SchemeEditModal, confirmAction, safeError, safeText, schemeLocation, type SchemeHost } from './scheme-modal';
 import type { RegionKind } from './selection/types';
 import type { SchemeDefinition } from './schemes/model';
 import { t } from './i18n';
@@ -137,7 +137,7 @@ class LengthCheckModal extends Modal {
       const details = this.reportEl.createEl('details');
       details.createEl('summary', { text: t('action.details') });
       details.createEl('p', { text: t('length.summary', { status: t(lengthLabels[report.status]), snapshot: report.snapshotId, count: report.checkedEntries }) });
-      details.createEl('p', { text: safeLocation(this.definition.source.location) });
+      details.createEl('p', { text: schemeLocation(this.definition) });
       for (const reason of report.reasons) details.createEl('p', { text: safeText(reason) });
       for (const risk of report.risks.slice(0, 20)) details.createEl('p', { text: `${risk.stagePath} / ${risk.dictPath}：${risk.key} → ${risk.defaultValue}（${risk.inputLength} → ${risk.outputLength}）` });
       if (report.risks.length > 20) details.createEl('p', { text: t('length.more', { count: report.risks.length }) });

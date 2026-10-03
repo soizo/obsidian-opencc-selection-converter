@@ -4,7 +4,7 @@ import { ENGINE_ID } from '../engine/types';
 import { PluginError } from '../errors';
 import { LIMITS } from '../limits';
 import { parseConfig, resolveDependencies } from './config';
-import type { LoadedResource, ResourcePlan, SchemeDefinition, Snapshot, SourceVersion } from './model';
+import type { ChainSchemeDefinition, ChainSnapshot, LoadedResource, ResourcePlan, SchemeDefinition, SingleResourcePlan, SingleSchemeDefinition, SingleSnapshot, Snapshot, SourceVersion } from './model';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -15,7 +15,7 @@ export async function sha256(bytes: Uint8Array): Promise<string> {
 function cancelled(signal: AbortSignal): void {
   if (signal.aborted) throw new PluginError('CANCELLED', '操作已取消。');
 }
-function approved(source: LoadedResource['source'], definition: SchemeDefinition): void {
+function approved(source: LoadedResource['source'], definition: SingleSchemeDefinition): void {
   if (source.kind === 'url' && source.location.startsWith('http:') && !definition.approvedHttpUrls?.includes(source.location)) {
     throw new PluginError('HTTP_CONFIRMATION_REQUIRED', '请先确认此 HTTP 地址的风险。', { source: source.location });
   }
@@ -52,7 +52,7 @@ export function sourcesChanged(app: App, versions: readonly SourceVersion[]): bo
     return !(file instanceof TFile) || file.stat.mtime !== version.mtime || file.stat.size !== version.size;
   });
 }
-async function readResource(app: App, source: LoadedResource['source'], definition: SchemeDefinition, limit: number, signal: AbortSignal): Promise<{ bytes: Uint8Array; version?: SourceVersion }> {
+async function readResource(app: App, source: LoadedResource['source'], definition: SingleSchemeDefinition, limit: number, signal: AbortSignal): Promise<{ bytes: Uint8Array; version?: SourceVersion }> {
   cancelled(signal);
   approved(source, definition);
   try {
@@ -83,14 +83,110 @@ async function readResource(app: App, source: LoadedResource['source'], definiti
   }
 }
 
-export async function schemeSourceKey(definition: SchemeDefinition): Promise<string> {
+export function isChainDefinition(definition: SchemeDefinition): definition is ChainSchemeDefinition {
+  return definition.source.kind === 'chain';
+}
+
+function singleDefinition(value: unknown): value is SingleSchemeDefinition {
+  if (!value || typeof value !== 'object') return false;
+  const definition = value as Partial<SingleSchemeDefinition>;
+  return typeof definition.id === 'string' && typeof definition.name === 'string' &&
+    !!definition.source && ['url', 'vault'].includes(definition.source.kind) && typeof definition.source.location === 'string';
+}
+
+export function validateChainDefinition(definition: ChainSchemeDefinition): void {
+  const steps = definition?.source?.steps;
+  if (!definition || typeof definition.id !== 'string' || typeof definition.name !== 'string' || definition.source?.kind !== 'chain' ||
+      !Array.isArray(steps) || steps.length < 2 || steps.length > LIMITS.chainSteps || steps.some(step => !singleDefinition(step))) {
+    throw new PluginError('INVALID_CONFIG', '转换链必须包含 2 至 16 个单一方案。');
+  }
+}
+
+async function singleSourceKey(definition: SingleSchemeDefinition): Promise<string> {
   const empty = resolveDependencies(parseConfig('{"conversion_chain":[]}'), definition);
   const overrides = Object.entries(definition.overrides ?? {}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   return sha256(encoder.encode(JSON.stringify([empty.configSource, definition.dependencyBase ?? null, overrides])));
 }
 
+export async function schemeSourceKey(definition: SchemeDefinition): Promise<string> {
+  if (!isChainDefinition(definition)) return singleSourceKey(definition);
+  validateChainDefinition(definition);
+  return sha256(encoder.encode(JSON.stringify(['opencc-chain-v1', await Promise.all(definition.source.steps.map(singleSourceKey))])));
+}
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+function rewriteVirtualPaths(text: string, paths: ReadonlyMap<string, string>): string {
+  let value: JsonValue;
+  try { value = JSON.parse(text) as JsonValue; }
+  catch { throw new PluginError('CACHE_INVALID', '快照配置无法读取。'); }
+  const rewrite = (item: JsonValue): JsonValue => Array.isArray(item) ? item.map(rewrite)
+    : item && typeof item === 'object' ? Object.fromEntries(Object.entries(item).map(([key, child]) => [key, rewrite(child)]))
+    : typeof item === 'string' && paths.has(item) ? paths.get(item)! : item;
+  return JSON.stringify(rewrite(value));
+}
+
+export async function combineSnapshots(definition: ChainSchemeDefinition, steps: readonly SingleSnapshot[]): Promise<ChainSnapshot> {
+  validateChainDefinition(definition);
+  if (steps.length !== definition.source.steps.length) throw new PluginError('SNAPSHOT_IDENTITY', '转换链步骤数量不匹配。');
+  const captured = structuredClone(steps) as SingleSnapshot[];
+  const resources: LoadedResource[] = [];
+  const metadata: ChainSnapshot['steps'] = [];
+  const sourceVersions: SourceVersion[] = [];
+  for (const [index, step] of captured.entries()) {
+    const expected = definition.source.steps[index]!;
+    if (step.schemeId !== expected.id || step.sourceKey !== await singleSourceKey(expected) || step.engineId !== ENGINE_ID) {
+      throw new PluginError('SNAPSHOT_IDENTITY', '转换链步骤与方案来源不匹配。');
+    }
+    const prefix = `step/${index}/`;
+    const paths = new Map(step.resources.map(resource => [resource.virtualPath, `${prefix}${resource.virtualPath}`]));
+    const { resources: _resources, ...stepMetadata } = step;
+    metadata.push({ ...stepMetadata, virtualConfigText: rewriteVirtualPaths(step.virtualConfigText, paths) });
+    resources.push(...step.resources.map(resource => ({ ...resource, virtualPath: paths.get(resource.virtualPath)! })));
+    sourceVersions.push(...(step.sourceVersions ?? []));
+  }
+  return {
+    id: crypto.randomUUID(), schemeId: definition.id, sourceKey: await schemeSourceKey(definition), engineId: ENGINE_ID,
+    createdAt: Date.now(), sourceVersions, steps: metadata, resources,
+  };
+}
+
+export async function splitChainSnapshot(definition: ChainSchemeDefinition, snapshot: ChainSnapshot): Promise<SingleSnapshot[]> {
+  validateChainDefinition(definition);
+  if (snapshot.schemeId !== definition.id || snapshot.sourceKey !== await schemeSourceKey(definition) || snapshot.engineId !== ENGINE_ID || snapshot.steps.length !== definition.source.steps.length) {
+    throw new PluginError('SNAPSHOT_IDENTITY', '转换链快照与方案来源不匹配。');
+  }
+  const result: SingleSnapshot[] = [];
+  for (const [index, metadata] of snapshot.steps.entries()) {
+    const prefix = `step/${index}/`;
+    const resources = snapshot.resources.filter(resource => resource.virtualPath.startsWith(prefix)).map(resource => ({ ...resource, virtualPath: resource.virtualPath.slice(prefix.length) }));
+    const paths = new Map(resources.map(resource => [`${prefix}${resource.virtualPath}`, resource.virtualPath]));
+    const step: SingleSnapshot = { ...structuredClone(metadata), virtualConfigText: rewriteVirtualPaths(metadata.virtualConfigText, paths), resources };
+    const expected = definition.source.steps[index]!;
+    if (step.schemeId !== expected.id || step.sourceKey !== await singleSourceKey(expected) || step.engineId !== ENGINE_ID) {
+      throw new PluginError('SNAPSHOT_IDENTITY', '转换链步骤与方案来源不匹配。');
+    }
+    result.push(step);
+  }
+  if (result.reduce((count, step) => count + step.resources.length, 0) !== snapshot.resources.length) throw new PluginError('CACHE_INVALID', '转换链包含未归属资源。');
+  return result;
+}
+
+export function prepareScheme(app: App, definition: SingleSchemeDefinition, signal: AbortSignal): Promise<SingleResourcePlan>;
+export function prepareScheme(app: App, definition: SchemeDefinition, signal: AbortSignal): Promise<ResourcePlan>;
 export async function prepareScheme(app: App, definition: SchemeDefinition, signal: AbortSignal): Promise<ResourcePlan> {
   cancelled(signal);
+  if (isChainDefinition(definition)) {
+    validateChainDefinition(definition);
+    const captured = structuredClone(definition);
+    const steps: SingleResourcePlan[] = [];
+    for (const step of captured.source.steps) steps.push(await prepareScheme(app, step, signal));
+    const httpUrls = [...new Set(steps.flatMap(step => step.httpUrls))];
+    return {
+      definition: captured, steps,
+      warnings: steps.flatMap((step, index) => step.warnings.map(warning => `步骤 ${index + 1}: ${warning}`)),
+      httpUrls, requiresHttpConfirmation: httpUrls.length > 0,
+    };
+  }
   const captured = structuredClone(definition);
   const source = resolveDependencies(parseConfig('{"conversion_chain":[]}'), captured).configSource;
   const { bytes, version } = await readResource(app, source, captured, LIMITS.configBytes, signal);
@@ -100,8 +196,23 @@ export async function prepareScheme(app: App, definition: SchemeDefinition, sign
   return plan;
 }
 
+export function loadPrepared(app: App, plan: SingleResourcePlan, engine: EngineClient, signal: AbortSignal): Promise<SingleSnapshot>;
+export function loadPrepared(app: App, plan: ResourcePlan, engine: EngineClient, signal: AbortSignal): Promise<Snapshot>;
 export async function loadPrepared(app: App, plan: ResourcePlan, engine: EngineClient, signal: AbortSignal): Promise<Snapshot> {
   cancelled(signal);
+  if ('steps' in plan) {
+    const captured = structuredClone(plan);
+    validateChainDefinition(captured.definition);
+    if (captured.steps.length !== captured.definition.source.steps.length) throw new PluginError('SNAPSHOT_IDENTITY', '转换链步骤数量不匹配。');
+    const steps: SingleSnapshot[] = [];
+    for (const step of captured.steps) steps.push(await loadPrepared(app, step, engine, signal));
+    const snapshot = await combineSnapshots(captured.definition, steps);
+    cancelled(signal);
+    if (sourcesChanged(app, snapshot.sourceVersions ?? [])) throw new PluginError('RESOURCE_CHANGED', '加载期间源文件发生变化。');
+    await engine.validate(snapshot, signal);
+    cancelled(signal);
+    return snapshot;
+  }
   // Capture the reviewed plan before any await, so later form edits cannot change it.
   const captured = structuredClone(plan);
   for (const resource of captured.resources) approved(resource.source, captured.definition);
@@ -117,7 +228,7 @@ export async function loadPrepared(app: App, plan: ResourcePlan, engine: EngineC
     resources.push({ ...resource, bytes: loaded.bytes, sha256: await sha256(loaded.bytes) });
     if (loaded.version) versions.push(loaded.version);
   }
-  const snapshot: Snapshot = {
+  const snapshot: SingleSnapshot = {
     id: crypto.randomUUID(), schemeId: captured.definition.id,
     sourceKey: await schemeSourceKey(captured.definition), engineId: ENGINE_ID,
     configText: captured.config.text, virtualConfigText: captured.virtualConfigText,

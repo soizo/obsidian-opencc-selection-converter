@@ -1,7 +1,7 @@
 import { createScanner, parseTree, type Node, type ParseError } from 'jsonc-parser';
 import { PluginError } from '../errors';
 import { LIMITS } from '../limits';
-import type { ParsedConfig, ResourcePlan, SchemeDefinition } from './model';
+import type { ParsedConfig, SingleResourcePlan, SingleSchemeDefinition } from './model';
 
 type Path = (string | number)[];
 type ConfigValue = string | number | boolean | null | ConfigValue[] | { [key: string]: ConfigValue };
@@ -144,7 +144,7 @@ function vaultLocation(value: string, directory: string[], path: Path): string {
   return parts.join('/');
 }
 
-export function resolveDependencies(config: ParsedConfig, definition: SchemeDefinition): ResourcePlan {
+export function resolveDependencies(config: ParsedConfig, definition: SingleSchemeDefinition): SingleResourcePlan {
   const source = definition.source;
   if (!source || !['url', 'vault'].includes(source.kind) || typeof source.location !== 'string') invalid('方案来源无效。', ['source'], 'INVALID_RESOURCE_PATH');
   const location = source.kind === 'url' ? urlLocation(source.location, ['source']) : vaultLocation(source.location, [], ['source']);
@@ -158,8 +158,8 @@ export function resolveDependencies(config: ParsedConfig, definition: SchemeDefi
     string(target, ['overrides', ref]);
     urlLocation(target as string, ['overrides', ref]);
   }
-  const resources: ResourcePlan['resources'] = [];
-  const bySource = new Map<string, ResourcePlan['resources'][number]>();
+  const resources: SingleResourcePlan['resources'] = [];
+  const bySource = new Map<string, SingleResourcePlan['resources'][number]>();
   const httpUrls = new Set<string>();
   if (source.kind === 'url' && location.startsWith('http:')) httpUrls.add(location);
   const data = structuredClone(config.data);

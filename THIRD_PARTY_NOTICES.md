@@ -12,6 +12,14 @@ License: Apache License 2.0; complete text in `engine/licenses/opencc.txt`, copi
 
 The project adds a C ABI bridge and tracing/enumeration code in `engine/bridge.cpp` and `engine/trace.cpp`. The build applies `engine/patches/opencc-trace.patch` to an exported source copy: it adds an optional observer and a pre-append output budget to `Conversion.hpp` / `Conversion.cpp`, while retaining OpenCC's matching implementation. Both modified source files carry an explicit modification notice. The external upstream checkout is never modified.
 
+## Mainland Traditional OpenCC dictionaries
+
+Copyright TerryTian-tech and contributors; contributor notices are retained in the dictionaries.
+
+Source: <https://github.com/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards>, fixed commit `67f2c7293e9ce226fcc1ee15cdb60b9b9dfd5c60`.
+
+License: Apache License 2.0; complete text in `engine/licenses/t2gov.txt`, copied from the pinned source. The `t2gov` preset loads the pinned configuration and dictionaries; `s2gov` runs the existing OpenCC `s2t` preset followed by this `t2gov` preset.
+
 ## marisa-trie
 
 Copyright 2010–2025 Susumu Yata.

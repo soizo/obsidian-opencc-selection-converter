@@ -1,11 +1,11 @@
 import type { App } from 'obsidian';
 import { DEFAULT_RULES, type RuleSettings } from '../selection/types';
 import type { EngineClient } from '../engine/client';
-import type { SchemeDefinition, SchemeStatus, Snapshot, SourceVersion } from './model';
+import type { ChainSnapshot, SchemeDefinition, SchemeStatus, SingleSnapshot, Snapshot, SourceVersion } from './model';
 import { parseConfig } from './config';
 import { PluginError } from '../errors';
 import { LIMITS } from '../limits';
-import { schemeSourceKey, sha256, sourcesChanged } from './resources';
+import { isChainDefinition, schemeSourceKey, sha256, sourcesChanged } from './resources';
 
 type Revision = { definition: SchemeDefinition; snapshotId: string; sourceKey: string; sourceVersions?: SourceVersion[]; lastSuccess?: number; warnings?: string[] };
 type Entry = { current: Revision; previous?: Revision };
@@ -13,7 +13,22 @@ type State = { generation: number; entries: Entry[]; drafts?: SchemeDefinition[]
 function validateRules(rules: RuleSettings): void {
   if (!rules || typeof rules.force !== 'boolean' || !rules.regions || Object.keys(rules.regions).length !== Object.keys(DEFAULT_RULES.regions).length || Object.keys(DEFAULT_RULES.regions).some(key => !['always', 'inside', 'never'].includes(rules.regions[key as keyof RuleSettings['regions']]))) throw new PluginError('INVALID_RULES', '区域规则无效。');
 }
-type StoredSnapshot = Omit<Snapshot, 'resources'> & { resources: Omit<Snapshot['resources'][number], 'bytes'>[] };
+function validSingleDefinition(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const definition = value as SchemeDefinition;
+  return !isChainDefinition(definition) && typeof definition.id === 'string' && typeof definition.name === 'string' && ['url', 'vault'].includes(definition.source?.kind) && typeof definition.source.location === 'string';
+}
+function validDraftDefinition(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const definition = value as SchemeDefinition;
+  if (!isChainDefinition(definition)) return validSingleDefinition(definition);
+  return typeof definition.id === 'string' && typeof definition.name === 'string' && Array.isArray(definition.source.steps) && definition.source.steps.length <= LIMITS.chainSteps && definition.source.steps.every(validSingleDefinition);
+}
+type StoredResources = Omit<Snapshot['resources'][number], 'bytes'>[];
+type StoredSnapshot = (Omit<SingleSnapshot, 'resources'> | Omit<ChainSnapshot, 'resources'>) & { resources: StoredResources };
+function snapshotWarnings(snapshot: Snapshot): string[] {
+  return 'steps' in snapshot ? snapshot.steps.flatMap(step => parseConfig(step.configText).warnings) : parseConfig(snapshot.configText).warnings;
+}
 const encoder = new TextEncoder();
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const digest = /^[a-f0-9]{64}$/;
@@ -76,7 +91,7 @@ export class SchemeStore {
           }
           if (state.rules) validateRules(state.rules);
           if (state.defaultId != null && !ids.has(state.defaultId)) throw new Error('Invalid default');
-          if (state.drafts !== undefined && (!Array.isArray(state.drafts) || state.drafts.some(item => !item || typeof item.id !== 'string' || typeof item.name !== 'string' || !['url', 'vault'].includes(item.source?.kind) || typeof item.source.location !== 'string'))) throw new Error('Invalid drafts');
+          if (state.drafts !== undefined && (!Array.isArray(state.drafts) || state.drafts.some(item => !validDraftDefinition(item)))) throw new Error('Invalid drafts');
           candidates.push(state);
         } catch { /* A torn slot must not hide the other committed version. */ }
       }
@@ -130,7 +145,7 @@ export class SchemeStore {
         next.entries.find(entry => entry.current.definition.id === definition.id)!.current.definition = definition;
         next.drafts = next.drafts?.filter(draft => draft.id !== definition.id);
         await this.commit(next);
-        this.statuses.set(definition.id, { kind: 'ready', warnings: parseConfig(snapshot.configText).warnings });
+        this.statuses.set(definition.id, { kind: 'ready', warnings: snapshotWarnings(snapshot) });
         return;
       }
       await this.engine.validate(snapshot, new AbortController().signal);
@@ -150,7 +165,7 @@ export class SchemeStore {
         }
         await adapter.write(`${directory}/complete.json`, await this.envelope({ ...snapshot, resources }));
         // Verify disk bytes before publishing the reference in the metadata slot.
-        const revision: Revision = { definition, snapshotId: snapshot.id, sourceKey, sourceVersions: snapshot.sourceVersions, lastSuccess: Date.now(), warnings: parseConfig(snapshot.configText).warnings };
+        const revision: Revision = { definition, snapshotId: snapshot.id, sourceKey, sourceVersions: snapshot.sourceVersions, lastSuccess: Date.now(), warnings: snapshotWarnings(snapshot) };
         await this.readSnapshot(revision);
         const next = structuredClone(this.state);
         const index = next.entries.findIndex(entry => entry.current.definition.id === definition.id);
@@ -169,8 +184,14 @@ export class SchemeStore {
   private async readSnapshot(revision: Revision): Promise<Snapshot> {
     const directory = this.directory(revision.snapshotId);
     const stored = await this.readEnvelope(`${directory}/complete.json`) as StoredSnapshot;
-    if (stored.id !== revision.snapshotId || stored.schemeId !== revision.definition.id || stored.sourceKey !== revision.sourceKey || typeof stored.configText !== 'string' || typeof stored.virtualConfigText !== 'string' || !Array.isArray(stored.resources) || stored.resources.length > LIMITS.resources) throw new PluginError('CACHE_INVALID', '快照身份或结构无效。');
-    let total = encoder.encode(stored.configText).byteLength + encoder.encode(stored.virtualConfigText).byteLength;
+    const chain = 'steps' in stored;
+    const validConfig = chain
+      ? Array.isArray(stored.steps) && stored.steps.length >= 2 && stored.steps.length <= LIMITS.chainSteps && stored.steps.every(step => typeof step.configText === 'string' && typeof step.virtualConfigText === 'string')
+      : typeof stored.configText === 'string' && typeof stored.virtualConfigText === 'string';
+    if (stored.id !== revision.snapshotId || stored.schemeId !== revision.definition.id || stored.sourceKey !== revision.sourceKey || !validConfig || !Array.isArray(stored.resources) || stored.resources.length > LIMITS.resources) throw new PluginError('CACHE_INVALID', '快照身份或结构无效。');
+    let total = chain
+      ? stored.steps.reduce((sum, step) => sum + encoder.encode(step.configText).byteLength + encoder.encode(step.virtualConfigText).byteLength, 0)
+      : encoder.encode(stored.configText).byteLength + encoder.encode(stored.virtualConfigText).byteLength;
     const resources: Snapshot['resources'] = [];
     for (const [index, metadata] of stored.resources.entries()) {
       const path = `${directory}/${index}.bin`;
@@ -181,7 +202,7 @@ export class SchemeStore {
       if (bytes.byteLength > LIMITS.dependencyBytes || total > LIMITS.snapshotBytes || await sha256(bytes) !== metadata.sha256) throw new PluginError('CACHE_INVALID', '缓存资源校验失败。');
       resources.push({ ...metadata, bytes });
     }
-    const snapshot = { ...stored, resources };
+    const snapshot: Snapshot = chain ? { ...(stored as Omit<ChainSnapshot, 'resources'>), resources } : { ...(stored as Omit<SingleSnapshot, 'resources'>), resources };
     await this.engine.validate(snapshot, new AbortController().signal);
     return snapshot;
   }
@@ -218,7 +239,7 @@ export class SchemeStore {
   }
   async saveDraft(definition: SchemeDefinition): Promise<void> {
     const captured = structuredClone(definition);
-    if (typeof captured.id !== 'string' || typeof captured.name !== 'string' || !['url', 'vault'].includes(captured.source?.kind) || typeof captured.source.location !== 'string') throw new PluginError('INVALID_CONFIG', '草稿结构无效。');
+    if (!validDraftDefinition(captured)) throw new PluginError('INVALID_CONFIG', '草稿结构无效。');
     return this.update(next => { next.drafts = [...(next.drafts ?? []).filter(draft => draft.id !== captured.id), captured]; });
   }
   getDrafts(): readonly SchemeDefinition[] { return structuredClone(this.state.drafts ?? []); }

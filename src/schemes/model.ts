@@ -8,15 +8,21 @@ export type SchemeStatus = {
   lastSuccess?: number;
 };
 
-export type SchemeDefinition = {
-  id: string;
-  name: string;
+type SchemeIdentity = { id: string; name: string };
+
+export type SingleSchemeDefinition = SchemeIdentity & {
   source: { kind: 'url' | 'vault'; location: string };
   dependencyBase?: string;
   overrides?: Record<string, string>;
   /** Exact HTTP URLs explicitly approved by the user, not an origin-wide grant. */
   approvedHttpUrls?: string[];
 };
+
+export type ChainSchemeDefinition = SchemeIdentity & {
+  source: { kind: 'chain'; steps: SingleSchemeDefinition[] };
+};
+
+export type SchemeDefinition = SingleSchemeDefinition | ChainSchemeDefinition;
 
 export type ParsedConfig = {
   text: string;
@@ -32,8 +38,8 @@ export type ParsedConfig = {
 
 export type SourceVersion = { path: string; mtime: number; size: number };
 
-export type ResourcePlan = {
-  definition: SchemeDefinition;
+export type SingleResourcePlan = {
+  definition: SingleSchemeDefinition;
   configSource: LoadedResource['source'];
   sourceVersions?: SourceVersion[];
   config: ParsedConfig;
@@ -43,6 +49,16 @@ export type ResourcePlan = {
   httpUrls: string[];
   requiresHttpConfirmation: boolean;
 };
+
+export type ChainResourcePlan = {
+  definition: ChainSchemeDefinition;
+  steps: SingleResourcePlan[];
+  warnings: string[];
+  httpUrls: string[];
+  requiresHttpConfirmation: boolean;
+};
+
+export type ResourcePlan = SingleResourcePlan | ChainResourcePlan;
 
 export type LoadedResource = {
   source: { kind: 'url' | 'vault'; location: string };
@@ -54,15 +70,27 @@ export type LoadedResource = {
   sha256: string;
 };
 
-/** Prepared snapshots are immutable; never transfer/detach their resource buffers. */
-export type Snapshot = {
+type SnapshotIdentity = {
   id: string;
   schemeId: string;
   sourceKey: string;
   engineId: string;
-  configText: string;
-  virtualConfigText: string;
-  resources: LoadedResource[];
   createdAt: number;
   sourceVersions?: SourceVersion[];
 };
+
+/** Prepared snapshots are immutable; never transfer/detach their resource buffers. */
+export type SingleSnapshot = SnapshotIdentity & {
+  configText: string;
+  virtualConfigText: string;
+  resources: LoadedResource[];
+};
+
+export type SnapshotStep = Omit<SingleSnapshot, 'resources'>;
+
+export type ChainSnapshot = SnapshotIdentity & {
+  steps: SnapshotStep[];
+  resources: LoadedResource[];
+};
+
+export type Snapshot = SingleSnapshot | ChainSnapshot;

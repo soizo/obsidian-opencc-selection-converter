@@ -2,20 +2,11 @@ import { ButtonComponent, FuzzySuggestModal, Modal, Notice, Setting, type Plugin
 import { PluginError } from './errors';
 import type { EngineClient } from './engine/client';
 import type { LengthReport } from './engine/types';
-import type { SchemeDefinition, ResourcePlan, Snapshot } from './schemes/model';
-import { prepareScheme, loadPrepared, schemeSourceKey } from './schemes/resources';
+import type { ChainSchemeDefinition, ResourcePlan, SchemeDefinition, SingleResourcePlan, SingleSchemeDefinition, SingleSnapshot, Snapshot } from './schemes/model';
+import { combineSnapshots, prepareScheme, loadPrepared, schemeSourceKey, isChainDefinition, splitChainSnapshot } from './schemes/resources';
 import type { SchemeStore } from './schemes/store';
 import { errorText, t } from './i18n';
-
-const OFFICIAL_CONFIG_BASE = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config';
-const OFFICIAL_DICTIONARY_BASE = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/prebuilds/assets/';
-const OFFICIAL_PRESETS = [
-  ['s2t', 'official.s2t'], ['t2s', 'official.t2s'], ['s2tw', 'official.s2tw'], ['tw2s', 'official.tw2s'],
-  ['s2hk', 'official.s2hk'], ['hk2s', 'official.hk2s'], ['s2twp', 'official.s2twp'], ['tw2sp', 'official.tw2sp'],
-  ['t2tw', 'official.t2tw'], ['tw2t', 'official.tw2t'], ['t2hk', 'official.t2hk'], ['hk2t', 'official.hk2t'],
-] as const;
-
-type OfficialPreset = (typeof OFFICIAL_PRESETS)[number];
+import { PRESETS, presetDefinition, type Preset } from './schemes/presets';
 
 export interface SchemeHost extends Plugin {
   store: SchemeStore;
@@ -34,6 +25,21 @@ export function safeLocation(location: string): string {
   } catch { return t('location.invalid'); }
 }
 export function safeText(text: string): string { return text.replace(/https?:\/\/[^\s"'<>）)]+/gi, safeLocation); }
+export function schemeLocation(definition: SchemeDefinition): string {
+  return isChainDefinition(definition) ? definition.source.steps.map(step => step.name).join(' → ') : safeLocation(definition.source.location);
+}
+function planSteps(plan: ResourcePlan): SingleResourcePlan[] { return 'steps' in plan ? plan.steps : [plan]; }
+function unapprovedUrls(plan: ResourcePlan): string[] {
+  return planSteps(plan).flatMap(step => step.httpUrls.filter(url => !step.definition.approvedHttpUrls?.includes(url)));
+}
+function approveUrls(plan: ResourcePlan, urls: readonly string[], approved: boolean): void {
+  for (const step of planSteps(plan)) {
+    const relevant = urls.filter(url => step.httpUrls.includes(url));
+    step.definition.approvedHttpUrls = approved
+      ? [...new Set([...(step.definition.approvedHttpUrls ?? []), ...relevant])]
+      : step.definition.approvedHttpUrls?.filter(url => !relevant.includes(url));
+  }
+}
 export function safeError(error: unknown): string {
   const message = error instanceof PluginError ? t('error.format', { code: error.code, message: errorText(error.code, error.message) }) : t('error.generic');
   return safeText(message);
@@ -79,10 +85,13 @@ class ConfigFilePicker extends FuzzySuggestModal<TFile> {
 }
 
 export class SchemeEditModal extends Modal {
-  private definition: SchemeDefinition;
+  private definition: SingleSchemeDefinition;
   private overridesText: string;
-  private sourceChoice: 'preset' | 'vault' | 'url';
-  private preset: OfficialPreset = OFFICIAL_PRESETS[0];
+  private sourceChoice: 'preset' | 'vault' | 'url' | 'chain';
+  private chainDefinition: ChainSchemeDefinition;
+  private chainSteps: { definition: SingleSchemeDefinition; snapshot: SingleSnapshot }[] = [];
+  private chainInitialized = false;
+  private preset: Preset = PRESETS[0];
   private officialDraft?: SchemeDefinition;
   private readonly controller = new AbortController();
   private busy = false;
@@ -98,15 +107,30 @@ export class SchemeEditModal extends Modal {
   constructor(private readonly host: SchemeHost, private readonly original?: SchemeDefinition, private readonly saved: () => void = () => {}) {
     super(host.app);
     this.modalEl.addClass('opencc-modal');
-    this.definition = original ? host.store.getDraft(original.id) ?? structuredClone(original) : { id: crypto.randomUUID(), name: '', source: { kind: 'vault', location: '' } };
-    this.sourceChoice = original ? this.definition.source.kind : 'preset';
+    const draft = original ? host.store.getDraft(original.id) : null;
+    const selected = draft ?? original;
+    this.chainDefinition = selected && isChainDefinition(selected)
+      ? structuredClone(selected)
+      : { id: crypto.randomUUID(), name: '', source: { kind: 'chain', steps: [] } };
+    this.definition = selected && !isChainDefinition(selected) ? structuredClone(selected) : { id: crypto.randomUUID(), name: '', source: { kind: 'vault', location: '' } };
+    this.sourceChoice = selected ? selected.source.kind : 'preset';
     this.overridesText = JSON.stringify(this.definition.overrides ?? {}, null, 2);
     this.scope.register(['Mod'], 'Enter', () => { void this.submit(); return false; });
   }
   onOpen(): void {
     this.host.uiModals.add(this);
     this.setTitle(this.original ? t('modal.editTitle') : t('modal.addTitle'));
-    this.render();
+    if (this.sourceChoice === 'chain') void this.initializeChain().then(() => this.render(), error => this.contentEl.setText(safeError(error)));
+    else this.render();
+  }
+  private async initializeChain(): Promise<void> {
+    if (this.chainInitialized) return;
+    this.chainInitialized = true;
+    if (!this.original || !isChainDefinition(this.original)) return;
+    const snapshot = await this.host.store.getActive(this.original.id);
+    if (!('steps' in snapshot)) throw new PluginError('CACHE_INVALID', '转换链快照无效。');
+    const steps = await splitChainSnapshot(this.chainDefinition, snapshot);
+    this.chainSteps = this.chainDefinition.source.steps.map((definition, index) => ({ definition: structuredClone(definition), snapshot: steps[index]! }));
   }
   private render(): void {
     this.contentEl.empty();
@@ -116,23 +140,25 @@ export class SchemeEditModal extends Modal {
     this.form = form.createDiv();
     new Setting(this.form).setName(t('field.source')).addDropdown(dropdown => {
       if (!this.original) dropdown.addOption('preset', t('official.title'));
-      dropdown.addOptions({ vault: t('source.vault'), url: t('source.url') }).setValue(this.sourceChoice).onChange(value => {
+      dropdown.addOptions({ vault: t('source.vault'), url: t('source.url'), chain: t('source.chain') }).setValue(this.sourceChoice).onChange(value => {
         this.sourceChoice = value as typeof this.sourceChoice;
-        if (value !== 'preset') this.definition.source.kind = value as 'url' | 'vault';
+        if (value === 'vault' || value === 'url') this.definition.source.kind = value;
         this.render();
       });
       dropdown.selectEl.setAttribute('aria-label', t('field.source'));
     });
     if (this.sourceChoice === 'preset') {
       new Setting(this.form).setName(t('official.preset')).addDropdown(dropdown => {
-        for (const preset of OFFICIAL_PRESETS) dropdown.addOption(preset[0], `${t(preset[1])} (${preset[0]})`);
+        for (const preset of PRESETS) dropdown.addOption(preset[0], `${t(preset[1])} (${preset[0]})`);
         dropdown.setValue(this.preset[0]).onChange(value => {
-          this.preset = OFFICIAL_PRESETS.find(preset => preset[0] === value)!;
+          this.preset = PRESETS.find(preset => preset[0] === value)!;
           this.officialDraft = undefined; this.render();
         });
         dropdown.selectEl.setAttribute('aria-label', t('official.preset'));
         dropdown.selectEl.dataset.openccPresets = '';
       });
+    } else if (this.sourceChoice === 'chain') {
+      this.renderChain(this.form);
     } else {
       this.locationSetting = new Setting(this.form).setName(t('field.location')).addText(text => {
         text.setPlaceholder(this.sourceChoice === 'url' ? 'https://…/config.json' : 'OpenCC/config.json').setValue(this.definition.source.location).onChange(value => {
@@ -173,18 +199,99 @@ export class SchemeEditModal extends Modal {
     this.cancel.buttonEl.type = 'button';
     this.primary = new ButtonComponent(footer).setButtonText(this.sourceChoice === 'preset' ? t('official.add') : t('action.load')).setCta();
     this.primary.buttonEl.type = 'submit';
-    if (this.sourceChoice === 'preset' && this.host.store.getDefinitions().some(definition => definition.source.kind === 'url' && definition.source.location === this.officialLocation(this.preset[0]))) {
-      this.primary.setButtonText(t('official.added')).setDisabled(true);
+    if (this.sourceChoice === 'preset') {
+      const candidate = presetDefinition(this.preset[0], t(this.preset[1]));
+      void Promise.all([schemeSourceKey(candidate), ...this.host.store.getDefinitions().map(schemeSourceKey)]).then(([key, ...existing]) => {
+        if (this.primary.buttonEl.isConnected && existing.includes(key)) this.primary.setButtonText(t('official.added')).setDisabled(true);
+      });
     }
   }
+  private renderChain(container: HTMLElement): void {
+    new Setting(container).setName(t('field.schemeName')).addText(text => {
+      text.setPlaceholder(this.chainSteps.map(step => step.definition.name).join(' → ')).setValue(this.chainDefinition.name).onChange(value => { this.chainDefinition.name = value; });
+      text.inputEl.setAttribute('aria-label', t('field.schemeName'));
+    });
+    container.createEl('p', { text: t('chain.desc'), cls: 'setting-item-description' });
+    const active = this.host.store.getDefinitions().filter((definition): definition is SingleSchemeDefinition => !isChainDefinition(definition));
+    for (const [index, step] of this.chainSteps.entries()) {
+      const choices = new Map(active.map(definition => [definition.id, definition]));
+      choices.set(step.definition.id, step.definition);
+      const setting = new Setting(container).setName(t('chain.step', { count: index + 1 }));
+      setting.addDropdown(dropdown => {
+        for (const definition of choices.values()) dropdown.addOption(definition.id, definition.name);
+        dropdown.setValue(step.definition.id).onChange(async id => {
+          const definition = choices.get(id); if (!definition || this.busy) return;
+          this.busy = true; dropdown.setDisabled(true);
+          try {
+            const snapshot = await this.host.store.getActive(definition.id);
+            if ('steps' in snapshot) throw new PluginError('INVALID_CONFIG', t('chain.invalid'));
+            this.chainSteps[index] = { definition: structuredClone(definition), snapshot };
+            this.chainDefinition.source.steps = this.chainSteps.map(item => structuredClone(item.definition));
+          } catch (error) { new Notice(safeError(error)); }
+          finally { this.busy = false; if (!this.controller.signal.aborted) this.render(); }
+        });
+        dropdown.selectEl.dataset.openccChainStep = '';
+        dropdown.selectEl.dataset.openccResolved = step.snapshot.schemeId;
+        dropdown.selectEl.setAttribute('aria-label', t('chain.step', { count: index + 1 }));
+      }).addExtraButton(button => {
+        button.setIcon('arrow-up').setTooltip(t('chain.up')).setDisabled(index === 0).onClick(() => {
+          [this.chainSteps[index - 1], this.chainSteps[index]] = [this.chainSteps[index]!, this.chainSteps[index - 1]!]; this.render();
+        });
+        button.extraSettingsEl.dataset.openccMoveUp = '';
+      }).addExtraButton(button => {
+        button.setIcon('arrow-down').setTooltip(t('chain.down')).setDisabled(index === this.chainSteps.length - 1).onClick(() => {
+          [this.chainSteps[index], this.chainSteps[index + 1]] = [this.chainSteps[index + 1]!, this.chainSteps[index]!]; this.render();
+        });
+        button.extraSettingsEl.dataset.openccMoveDown = '';
+      }).addExtraButton(button => {
+        button.setIcon('trash-2').setTooltip(t('chain.remove')).onClick(() => { this.chainSteps.splice(index, 1); this.render(); });
+        button.extraSettingsEl.dataset.openccRemoveStep = '';
+      });
+    }
+    new Setting(container).addButton(button => {
+      button.setButtonText(t('chain.add')).setDisabled(!active.length || this.chainSteps.length >= 16).onClick(async () => {
+        if (this.busy || !active.length) return;
+        this.busy = true; button.setDisabled(true);
+        try {
+          const definition = active[0]!;
+          const snapshot = await this.host.store.getActive(definition.id);
+          if ('steps' in snapshot) throw new PluginError('INVALID_CONFIG', t('chain.invalid'));
+          this.chainSteps.push({ definition: structuredClone(definition), snapshot });
+          this.chainDefinition.source.steps = this.chainSteps.map(item => structuredClone(item.definition));
+        } catch (error) { new Notice(safeError(error)); }
+        finally { this.busy = false; if (!this.controller.signal.aborted) this.render(); }
+      });
+      button.buttonEl.type = 'button'; button.buttonEl.dataset.openccAddStep = '';
+    });
+  }
   private message(text: string): void { this.status.setText(text); this.status.hidden = !text; }
-  openPreview(): void { this.open(); void this.prepare(true); }
-  private officialLocation(id: OfficialPreset[0]): string { return `${OFFICIAL_CONFIG_BASE}/${id}.json`; }
+  openPreview(): void {
+    this.open();
+    if (this.sourceChoice === 'chain') void this.initializeChain().then(() => this.prepare(true, this.chainDefinition));
+    else void this.prepare(true);
+  }
+  private async submitChain(): Promise<void> {
+    if (this.chainSteps.length < 2) { this.message(t('chain.invalid')); return; }
+    const definition: ChainSchemeDefinition = structuredClone({
+      ...this.chainDefinition,
+      name: this.chainDefinition.name.trim() || this.chainSteps.map(step => step.definition.name).join(' → '),
+      source: { kind: 'chain', steps: this.chainSteps.map(step => structuredClone(step.definition)) },
+    });
+    this.busy = true; this.lock(true);
+    try {
+      let snapshot: Snapshot;
+      if (this.original && isChainDefinition(this.original) && await schemeSourceKey(definition) === await schemeSourceKey(this.original)) snapshot = await this.host.store.getActive(this.original.id);
+      else snapshot = await combineSnapshots(definition, this.chainSteps.map(step => step.snapshot));
+      await this.publish(definition, snapshot);
+    } catch (error) { await this.failed(error, definition); }
+    finally { this.busy = false; if (!this.publishing) this.lock(false); }
+  }
   private async submit(): Promise<void> {
     if (this.busy || this.controller.signal.aborted || this.primary.buttonEl.disabled) return;
     if (this.reviewPlan) { await this.load(this.reviewPlan); return; }
+    if (this.sourceChoice === 'chain') { await this.submitChain(); return; }
     if (this.sourceChoice === 'preset') {
-      this.officialDraft ??= { id: crypto.randomUUID(), name: t(this.preset[1]), source: { kind: 'url', location: this.officialLocation(this.preset[0]) }, dependencyBase: OFFICIAL_DICTIONARY_BASE };
+      this.officialDraft ??= presetDefinition(this.preset[0], t(this.preset[1]));
       await this.prepare(false, this.officialDraft);
     } else await this.prepare();
   }
@@ -193,7 +300,7 @@ export class SchemeEditModal extends Modal {
     this.primary.setDisabled(locked);
     if (!locked) this.form.querySelector<HTMLElement>('.is-invalid input, .is-invalid textarea')?.focus();
   }
-  private captured(): SchemeDefinition {
+  private captured(): SingleSchemeDefinition {
     const definition = structuredClone(this.definition);
     definition.source.location = definition.source.location.trim();
     if (!definition.source.location) {
@@ -227,7 +334,7 @@ export class SchemeEditModal extends Modal {
         if (!this.controller.signal.aborted) await this.publish(definition, snapshot);
         return;
       }
-      if (definition.source.kind === 'url' && /^http:/i.test(definition.source.location)) {
+      if (!isChainDefinition(definition) && definition.source.kind === 'url' && /^http:/i.test(definition.source.location)) {
         const url = new URL(definition.source.location).href;
         if (!definition.approvedHttpUrls?.includes(url)) {
           if (!await confirmAction(this.host, t('http.configTitle'), t('http.configDesc', { location: safeLocation(url) }), t('http.allow'), this.controller.signal)) { this.message(''); return; }
@@ -238,7 +345,7 @@ export class SchemeEditModal extends Modal {
       await this.host.store.saveDraft(definition);
       const plan = await prepareScheme(this.app, definition, this.controller.signal);
       if (this.controller.signal.aborted) return;
-      if (review || plan.warnings.length || plan.httpUrls.some(url => !plan.definition.approvedHttpUrls?.includes(url))) {
+      if (review || plan.warnings.length || unapprovedUrls(plan).length) {
         this.showPlan(plan); reviewed = true;
       } else {
         this.busy = false;
@@ -251,20 +358,23 @@ export class SchemeEditModal extends Modal {
     this.reviewPlan = plan;
     this.form.hidden = true;
     this.previewEl.dataset.openccReview = '';
-    this.previewEl.createEl('p', { text: t('preview.summary', { count: plan.resources.length }) });
+    const steps = planSteps(plan);
+    this.previewEl.createEl('p', { text: t('preview.summary', { count: steps.reduce((count, step) => count + step.resources.length, 0) }) });
     const details = this.previewEl.createEl('details');
     details.createEl('summary', { text: t('preview.title') });
-    details.createEl('p', { text: t('preview.config', { location: safeLocation(plan.configSource.location) }) });
     const list = details.createEl('ul');
-    for (const resource of plan.resources) list.createEl('li', { text: `${safeText(resource.originalRef)} → ${safeLocation(resource.source.location)} · ${resource.dictType}` });
+    for (const step of steps) {
+      details.createEl('p', { text: t('preview.config', { location: safeLocation(step.configSource.location) }) });
+      for (const resource of step.resources) list.createEl('li', { text: `${safeText(resource.originalRef)} → ${safeLocation(resource.source.location)} · ${resource.dictType}` });
+    }
     for (const warning of plan.warnings) this.previewEl.createEl('p', { text: safeText(warning) });
-    const unapproved = plan.httpUrls.filter(url => !plan.definition.approvedHttpUrls?.includes(url));
+    const unapproved = unapprovedUrls(plan);
     this.primary.setButtonText(t('action.load')).setDisabled(unapproved.length > 0);
     if (unapproved.length) {
       new Setting(this.previewEl).setName(t('http.resources')).setDesc(t('http.resourcesDesc', { locations: unapproved.map(safeLocation).join('; ') })).addToggle(toggle => {
         toggle.setValue(false).onChange(value => {
           if (this.busy) { toggle.setValue(!value); return; }
-          plan.definition.approvedHttpUrls = value ? [...new Set([...(plan.definition.approvedHttpUrls ?? []), ...unapproved])] : plan.definition.approvedHttpUrls?.filter(url => !unapproved.includes(url));
+          approveUrls(plan, unapproved, value);
           this.primary.setDisabled(!value);
         });
         toggle.toggleEl.setAttribute('aria-label', t('http.resources'));
@@ -335,7 +445,7 @@ export class SchemePicker extends FuzzySuggestModal<SchemeDefinition> {
     super(host.app); this.setPlaceholder(t('picker.placeholder'));
   }
   getItems(): SchemeDefinition[] { return [...this.host.store.getDefinitions()]; }
-  getItemText(item: SchemeDefinition): string { return `${item.name} — ${safeLocation(item.source.location)}`; }
+  getItemText(item: SchemeDefinition): string { return `${item.name} — ${schemeLocation(item)}`; }
   onChooseItem(item: SchemeDefinition): void { this.choose(item); }
   async onOpen(): Promise<void> { this.host.uiModals.add(this); await super.onOpen(); }
   onClose(): void { super.onClose(); this.host.uiModals.delete(this); }

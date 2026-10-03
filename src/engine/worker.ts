@@ -94,16 +94,16 @@ function scalarLength(value: string): number {
   return Array.from(value).length;
 }
 
-function parseReport(request: EngineRequest, text: string): TraceResult | LengthReport {
+function parseReport(operation: EngineRequest['operation'], snapshotId: string, input: string, text: string): TraceResult | LengthReport {
   const invalid = () => failure('ENGINE_PROTOCOL', '离线引擎返回了无效的追踪或检查报告。');
   let value: unknown;
   try { value = JSON.parse(text); } catch { throw invalid(); }
   if (!value || typeof value !== 'object') throw invalid();
-  if (request.operation === 'convert') {
+  if (operation === 'convert') {
     const trace = value as TraceResult;
     if (typeof trace.output !== 'string' || !Array.isArray(trace.origins) || !Array.isArray(trace.matches) ||
         trace.origins.length !== scalarLength(trace.output)) throw invalid();
-    const inputLength = scalarLength(request.input ?? '');
+    const inputLength = scalarLength(input);
     let previous = 0;
     for (const origin of trace.origins) {
       if (!Number.isInteger(origin) || origin < previous || origin >= inputLength) throw invalid();
@@ -130,24 +130,24 @@ function parseReport(request: EngineRequest, text: string): TraceResult | Length
         typeof risk.defaultValue !== 'string' || scalarLength(risk.key) !== risk.inputLength ||
         scalarLength(risk.defaultValue) !== risk.outputLength || risk.inputLength === risk.outputLength) throw invalid();
   }
-  return { ...report, snapshotId: request.snapshot.id };
+  return { ...report, snapshotId };
 }
 
 async function execute(request: EngineRequest): Promise<EngineOutput> {
-  if (request.snapshot.resources.length > LIMITS.resources) throw failure('RESOURCE_LIMIT', '方案资源数量超过上限。');
-  const config = encodeText(request.snapshot.virtualConfigText);
-  const original = encodeText(request.snapshot.configText);
-  if (config.byteLength > LIMITS.configBytes || original.byteLength > LIMITS.configBytes) {
+  const steps = 'steps' in request.snapshot ? request.snapshot.steps : [request.snapshot];
+  const chain = steps.length > 1;
+  if (!steps.length || steps.length > LIMITS.chainSteps || request.snapshot.resources.length > LIMITS.resources) throw failure('RESOURCE_LIMIT', '方案步骤或资源数量超过上限。');
+  const configs = steps.map(step => encodeText(step.virtualConfigText));
+  const originals = steps.map(step => encodeText(step.configText));
+  if (configs.reduce((sum, bytes) => sum + bytes.byteLength, 0) > LIMITS.configBytes || originals.reduce((sum, bytes) => sum + bytes.byteLength, 0) > LIMITS.configBytes) {
     throw failure('CONFIG_LIMIT', '方案配置超过大小上限。');
   }
-  let totalBytes = config.byteLength + original.byteLength;
+  let totalBytes = [...configs, ...originals].reduce((sum, bytes) => sum + bytes.byteLength, 0);
   for (const resource of request.snapshot.resources) {
     safePath(resource.virtualPath);
     if (resource.bytes.byteLength > LIMITS.dependencyBytes) throw failure('RESOURCE_LIMIT', '单个方案资源超过大小上限。');
     totalBytes += resource.bytes.byteLength;
     if (totalBytes > LIMITS.snapshotBytes) throw failure('RESOURCE_LIMIT', '方案快照超过大小上限。');
-  }
-  for (const resource of request.snapshot.resources) {
     if (resource.dictType !== 'text') continue;
     let text: string;
     try { text = decoder.decode(resource.bytes); }
@@ -157,9 +157,7 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
   const mod = await module();
   mod.FS.mkdir('/snapshot');
   const files: string[] = [];
-  let handle = -1;
   let output: EngineOutput;
-  let leakedHandle = false;
   try {
     mod.FS.chdir('/snapshot');
     for (const resource of request.snapshot.resources) {
@@ -168,32 +166,60 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
       mod.FS.writeFile(path, resource.bytes);
       files.push(path);
     }
-    handle = withBytes(mod, config, pointer => mod._occ_open(pointer, config.byteLength));
-    if (handle < 1) throw nativeError(mod);
-    if (request.operation !== 'validate') {
-      let status: number;
-      if (request.operation === 'checkLengths') status = mod._occ_check_lengths(handle);
-      else {
-        const input = encodeText(request.input ?? '');
-        status = withBytes(mod, input, pointer => request.operation === 'convert'
-          ? mod._occ_trace(handle, pointer, input.byteLength)
-          : mod._occ_convert(handle, pointer, input.byteLength));
+    const run = (index: number, input: string): string | TraceResult | LengthReport | undefined => {
+      const config = configs[index]!;
+      const handle = withBytes(mod, config, pointer => mod._occ_open(pointer, config.byteLength));
+      if (handle < 1) throw nativeError(mod);
+      try {
+        if (request.operation === 'validate') return undefined;
+        let status: number;
+        if (request.operation === 'checkLengths') status = mod._occ_check_lengths(handle);
+        else {
+          const bytes = encodeText(input);
+          status = withBytes(mod, bytes, pointer => request.operation === 'convert' ? mod._occ_trace(handle, pointer, bytes.byteLength) : mod._occ_convert(handle, pointer, bytes.byteLength));
+        }
+        if (status !== 0) throw nativeError(mod);
+        const length = mod._occ_result_len();
+        const structured = request.operation === 'convert' || request.operation === 'checkLengths';
+        if (length > (structured ? LIMITS.traceBytes : LIMITS.outputBytes)) throw failure(structured ? 'TRACE_LIMIT' : 'OUTPUT_LIMIT', '离线引擎输出超过大小上限。');
+        const text = decoder.decode(nativeBytes(mod, mod._occ_result_ptr(), length));
+        return structured ? parseReport(request.operation, request.snapshot.id, input, text) : text;
+      } finally {
+        mod._occ_close(handle);
+        if (mod._occ_handle_count() !== 0) throw failure('ENGINE_HANDLE_LEAK', '离线引擎未能释放转换器。');
       }
-      if (status !== 0) throw nativeError(mod);
-      const pointer = mod._occ_result_ptr();
-      const length = mod._occ_result_len();
-      const structured = request.operation === 'convert' || request.operation === 'checkLengths';
-      if (length > (structured ? LIMITS.traceBytes : LIMITS.outputBytes)) {
-        throw failure(structured ? 'TRACE_LIMIT' : 'OUTPUT_LIMIT', '离线引擎输出超过大小上限。');
+    };
+    if (request.operation === 'validate') {
+      for (let index = 0; index < steps.length; index++) run(index, '');
+    } else if (request.operation === 'convertPlain') {
+      let text = request.input ?? '';
+      for (let index = 0; index < steps.length; index++) text = run(index, text) as string;
+      output = text;
+    } else if (request.operation === 'convert') {
+      let text = request.input ?? '';
+      let origins = Array.from({ length: scalarLength(text) }, (_, index) => index);
+      const matches: MatchRecord[] = [];
+      for (let index = 0; index < steps.length; index++) {
+        const trace = run(index, text) as TraceResult;
+        origins = trace.origins.map(origin => origins[origin]!);
+        matches.push(...trace.matches.map(match => chain ? { ...match, stagePath: `$.steps[${index}]${match.stagePath.slice(1)}`, dictPath: `$.steps[${index}]${match.dictPath.slice(1)}` } : match));
+        text = trace.output;
+        if (encoder.encode(JSON.stringify({ output: text, origins, matches })).byteLength > LIMITS.traceBytes) throw failure('TRACE_LIMIT', '离线引擎输出超过大小上限。');
       }
-      const text = decoder.decode(nativeBytes(mod, pointer, length));
-      output = structured ? parseReport(request, text) : text;
+      output = { output: text, origins, matches };
+    } else {
+      const reports: LengthReport[] = [];
+      for (let index = 0; index < steps.length; index++) reports.push(run(index, '') as LengthReport);
+      const incomplete = reports.filter(report => report.status === 'incomplete');
+      const risks = reports.flatMap((report, index) => report.risks.map(risk => chain ? { ...risk, stagePath: `$.steps[${index}]${risk.stagePath.slice(1)}`, dictPath: `$.steps[${index}]${risk.dictPath.slice(1)}` } : risk));
+      output = {
+        snapshotId: request.snapshot.id,
+        status: incomplete.length ? 'incomplete' : risks.length ? 'risk' : 'equal',
+        checkedEntries: reports.reduce((sum, report) => sum + report.checkedEntries, 0), risks,
+        reasons: incomplete.flatMap((report, index) => report.reasons.map(reason => `$.steps[${index}]: ${reason}`)),
+      };
     }
   } finally {
-    if (handle > 0) {
-      mod._occ_close(handle);
-      leakedHandle = mod._occ_handle_count() !== 0;
-    }
     mod.FS.chdir('/');
     for (const file of [...files].reverse()) {
       try { mod.FS.unlink(`/snapshot/${file}`); } catch { /* Cleanup after rejected native load. */ }
@@ -206,8 +232,6 @@ async function execute(request: EngineRequest): Promise<EngineOutput> {
     }
     try { mod.FS.rmdir('/snapshot'); } catch { /* Empty snapshots or native FS bookkeeping. */ }
   }
-  // Preserve an earlier conversion error and always finish filesystem cleanup.
-  if (leakedHandle) throw failure('ENGINE_HANDLE_LEAK', '离线引擎未能释放转换器。');
   return output;
 }
 
