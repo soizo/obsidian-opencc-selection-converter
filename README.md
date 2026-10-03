@@ -24,9 +24,9 @@ To rebuild the native assets after changing the engine, run `npm run build:engin
 
 ```text
 1. Open Settings → OpenCC Selection Converter → Add scheme.
-2. Pick an official preset and click Add. For a custom scheme, choose a vault file or enter a config URL, then Save. The name is optional; the first scheme becomes the default.
-3. Select text in Source mode or Live Preview and use Convert selection, a scheme command, or the context menu.
-4. Undo once when needed to restore the complete conversion.
+2. Pick a preset and click Add. This includes **Traditional → Mainland Traditional (`t2gov`)** and **Simplified → Mainland Traditional (`s2gov`)**. For a custom scheme, choose a vault file or enter a config URL, then Save.
+3. To run several complete OpenCC schemes in order, choose **Conversion chain**, add at least two loaded schemes and arrange the steps. Chains are saved as independent offline snapshots; use Refresh when you want to reload their original sources.
+4. Select text in Source mode or Live Preview and use Convert selection, a scheme command, or the context menu. Undo once to restore the complete conversion.
 ```
 
 Each active scheme has its own stable command, which can be assigned a separate shortcut in Obsidian’s **Hotkeys** settings. No selection means no conversion of the whole note.
@@ -36,13 +36,16 @@ Use **Edit → Save** for changes; renaming alone works offline. Each scheme’s
 ## Schemes and cache
 
 - Supports real OpenCC JSON/JSONC configurations, inline, text, ocd and ocd2 dictionaries, and the conversion stages defined by the configuration.
+- A conversion chain runs every complete configuration in order, including each step’s normalization and segmentation. Chains allow repeated schemes, contain 2–16 steps, and cannot nest other chains.
 - URL-relative dependencies are resolved relative to the configuration URL by default; vault-relative dependencies are resolved relative to the configuration file. Advanced settings can specify a dependency base or per-file overrides.
 - HTTP uses exact-URL authorisation rather than authorising an entire domain. Selected note text is processed locally by the WASM engine; it is not uploaded, logged or written to the cache.
 - A successful scheme saves a complete immutable snapshot for offline reuse. If a refresh fails, the previous usable snapshot is retained and its status is shown.
 
+The Mainland Traditional presets use dictionaries from [TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards](https://github.com/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards), pinned to a fixed commit under Apache-2.0. `s2gov` runs the existing official OpenCC `s2t` preset and then `t2gov`.
+
 ## Safe mapping and equal length
 
-Strict mode checks every actual native OpenCC match and the final Unicode code-point count for the conversion. Any length change cancels the complete write.
+Strict mode checks every actual native OpenCC match in every chain step and the final Unicode code-point count. An intermediate length change is rejected even if a later step restores the original length; any failure cancels the complete write.
 
 **Force mode** allows length changes, but does not bypass selection boundaries, Markdown structure, link targets, region rules or candidate-source re-parsing. When a cross-format phrase cannot be assigned uniquely, the output inherits the formatting at the start of the phrase.
 

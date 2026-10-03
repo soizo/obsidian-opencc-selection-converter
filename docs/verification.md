@@ -152,6 +152,15 @@
 - 最终 `npm test && npm run build && node scripts/verify-artifact.mjs && git diff --check` 通过：完整宿主矩阵 **133 通过 / 0 失败**；正式包 **1,208,388 字节**，许可完整、不含测试/Node 运行时依赖，WASM 内存仍为 32/256 MiB。
 - 主动 LSP 检查无错误，11 个检查对象中 8 个确认干净、3 个未确认；TypeScript 全项目检查通过。Impeccable 静态检查无发现。当前工作区原有官方预设下载来源调整予以保留，未并入本次界面提交。
 
+## 转换链与中国大陆繁体预设
+
+- 新增 2–16 步转换链；每一步完整重新执行自己的 normalization、segmentation 和 conversion。链保存独立资源快照，原方案删除后仍可离线改名、重排和转换，只有显式刷新才重新读取来源。
+- `t2gov` 固定 TerryTian 资源提交 `67f2c7293e9ce226fcc1ee15cdb60b9b9dfd5c60`；`s2gov` 顺序执行官方 OpenCC 1.4.2 `s2t` 与该 `t2gov`。真实 CDN 专项 **2 通过 / 0 失败**，固定 fixture 回归也通过。
+- Markdown/编辑器链专项 **29 通过 / 0 失败**：严格模式拒绝先扩长后缩短，Force 保留安全映射，链接目标和选区外原文不变；源码和实时预览均为单次提交、一次撤销。
+- 设置专项 **19 通过 / 0 失败**：原生步骤添加、重复、重排、独立离线编辑和官方预设。自动检查 360 px 宽度下明暗主题无横向溢出，按钮均有可访问名称；未保存人工截图。
+- 正式包实际通过 UI 创建两个合成方案和链、设为默认、转换并一次撤销；确认正式包没有 `runCliSuite`。生产产物 **1,239,345 字节**，许可完整且不含测试 fixture 或 Node 运行时依赖。
+- `npm run check`、`npm run test:build`、正式包验收、产物核验和 `git diff --check` 通过；21 个改动 TypeScript 文件主动 LSP 检查为 0 诊断。完整矩阵本次运行通过 smoke、engine、trace、config、resources、cache 后，在未改动的 Markdown 专项因后台 Obsidian 计时节流超过 CLI 上限；没有把该次运行记作完整通过，也未继续消耗时间重跑。改动相关专项均单独通过。
+
 ## 尚未验收
 
-移动模拟、Android/iOS 真机以及用户真实 URL/vault 方案仍未验收；复杂无别名 wikilink 仍会保守拒绝。桌面正式包可以安装和完成合成方案工作流，但在获得移动证据前不能宣称整个跨平台发布已完全验收。可行性探针不替代正式插件验收。
+移动模拟、Android/iOS 真机、人工截图以及用户真实私有 URL/vault 方案仍未验收；复杂无别名 wikilink 仍会保守拒绝。桌面正式包可以安装和完成链工作流，但在获得移动证据前不能宣称整个跨平台发布已完全验收。
