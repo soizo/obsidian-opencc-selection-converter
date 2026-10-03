@@ -9,6 +9,9 @@ import { schemeSourceKey } from '../../src/schemes/resources';
 import { parseConfig, resolveDependencies } from '../../src/schemes/config';
 import { snapshot } from './engine.test';
 import type { SchemeStore } from '../../src/schemes/store';
+import type { SchemeDefinition, SingleSchemeDefinition } from '../../src/schemes/model';
+import { isChainDefinition } from '../../src/schemes/resources';
+import { presetDefinition } from '../../src/schemes/presets';
 import { equal, ok } from './assert';
 import { openFixture, type TestPlugin } from './fixtures';
 import { errorText, localeFor, t } from '../../src/i18n';
@@ -25,6 +28,11 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
   const endpoint = plugin as Endpoint;
   let document = window.document;
   const modalDocument = () => [...endpoint.uiModals].at(-1)?.contentEl.ownerDocument ?? document;
+  const locationOf = (definition: SchemeDefinition): string | undefined => isChainDefinition(definition) ? undefined : definition.source.location;
+  const single = (definition: SchemeDefinition): SingleSchemeDefinition => {
+    if (isChainDefinition(definition)) throw new Error('Expected a single scheme');
+    return definition;
+  };
   const button = (root: ParentNode, name: string) => {
     if (root === document) root = modalDocument();
     const element = Array.from(root.querySelectorAll<HTMLButtonElement>('button, [role="button"]')).filter(item => (item.textContent === name || item.getAttribute('aria-label') === name) && !item.disabled).at(-1);
@@ -110,14 +118,67 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
       await mounted(async root => {
         button(root, t('settings.addScheme'));
         const presets = modalDocument().querySelector<HTMLSelectElement>('[data-opencc-presets]'); ok(presets);
-        equal(Array.from(presets.options).map(item => item.value).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t');
-        button(document, t('official.add'));
-        const location = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config/s2t.json';
-        await wait(() => [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].some(item => item.source.location === location), 'Create official preset');
-        const draft = [...endpoint.store.getDrafts(), ...endpoint.store.getDefinitions()].find(item => item.source.location === location); ok(draft);
-        equal(draft.name, t('official.s2t')); equal(draft.source.kind, 'url');
-        const plan = resolveDependencies(parseConfig('{"conversion_chain":[{"dict":{"type":"ocd2","file":"STCharacters.ocd2"}}]}'), draft);
+        equal(Array.from(presets.options).map(item => item.value).join(','), 's2t,t2s,s2tw,tw2s,s2hk,hk2s,s2twp,tw2sp,t2tw,tw2t,t2hk,hk2t,t2gov,s2gov');
+        const gov = presetDefinition('t2gov', 'gov'); ok(!isChainDefinition(gov));
+        ok(gov.source.location.includes('@67f2c7293e9ce226fcc1ee15cdb60b9b9dfd5c60/t2gov/t2gov.json'));
+        const s2gov = presetDefinition('s2gov', 's2gov'); ok(isChainDefinition(s2gov));
+        equal(s2gov.source.steps.map(step => step.source.location), [
+          'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config/s2t.json',
+          gov.source.location,
+        ]);
+        const official = presetDefinition('s2t', t('official.s2t')); ok(!isChainDefinition(official));
+        equal(official.source.location, 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config/s2t.json');
+        const plan = resolveDependencies(parseConfig('{"conversion_chain":[{"dict":{"type":"ocd2","file":"STCharacters.ocd2"}}]}'), single(official));
         equal(plan.resources[0]?.source.location, 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/prebuilds/assets/STCharacters.ocd2');
+      });
+    } },
+    { name: 'settings/chain-editor', run: async () => {
+      await mounted(async root => {
+        const first = await add(root, `Chain A ${crypto.randomUUID()}`, { 甲: '乙' });
+        const second = await add(root, `Chain B ${crypto.randomUUID()}`, { 乙: '丙' });
+        const name = `Chain ${crypto.randomUUID()}`;
+        button(root, t('settings.addScheme'));
+        field(t('field.source'), 'chain'); field(t('field.schemeName'), name);
+        const addStep = () => { const control = modalDocument().querySelector<HTMLElement>('[data-opencc-add-step]'); ok(control); control.click(); };
+        addStep();
+        await wait(() => modalDocument().querySelectorAll<HTMLSelectElement>('[data-opencc-chain-step]').length === 1, 'Render first chain step');
+        addStep();
+        await wait(() => modalDocument().querySelectorAll<HTMLSelectElement>('[data-opencc-chain-step]').length === 2, 'Render chain steps');
+        const doc = modalDocument(); const modal = doc.querySelector<HTMLElement>('.modal'); ok(modal);
+        const originalWidth = modal.style.width; const originalMaxWidth = modal.style.maxWidth;
+        const wasDark = doc.body.classList.contains('theme-dark'); const wasLight = doc.body.classList.contains('theme-light');
+        modal.style.width = '360px'; modal.style.maxWidth = '360px';
+        for (const theme of ['theme-dark', 'theme-light']) {
+          doc.body.classList.toggle('theme-dark', theme === 'theme-dark'); doc.body.classList.toggle('theme-light', theme === 'theme-light');
+          ok(modal.scrollWidth <= modal.clientWidth + 1, `${theme} narrow chain editor must not overflow`);
+          for (const control of modal.querySelectorAll<HTMLButtonElement>('button')) ok(control.textContent?.trim() || control.getAttribute('aria-label') || control.title, 'Every chain button needs an accessible name');
+        }
+        doc.body.classList.toggle('theme-dark', wasDark); doc.body.classList.toggle('theme-light', wasLight); modal.style.width = originalWidth; modal.style.maxWidth = originalMaxWidth;
+        await wait(() => Array.from(modalDocument().querySelectorAll<HTMLSelectElement>('[data-opencc-chain-step]')).every(select => select.dataset.openccResolved === first.definition.id), 'Resolve default chain snapshots');
+        const secondSelect = Array.from(modalDocument().querySelectorAll<HTMLSelectElement>('[data-opencc-chain-step]'))[1]!;
+        secondSelect.value = second.definition.id; secondSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        await wait(() => {
+          const select = Array.from(modalDocument().querySelectorAll<HTMLSelectElement>('[data-opencc-chain-step]'))[1];
+          return select?.value === second.definition.id && select.dataset.openccResolved === second.definition.id;
+        }, 'Resolve selected chain snapshot');
+        button(document, t('action.load'));
+        await wait(() => endpoint.store.getDefinitions().some(item => item.name === name), 'Activate chain');
+        const chain = endpoint.store.getDefinitions().find(item => item.name === name)!;
+        equal(await endpoint.engine.convertPlain(await endpoint.store.getActive(chain.id), '甲', new AbortController().signal), '丙');
+        const row = root.querySelector<HTMLElement>(`[data-scheme-id="${chain.id}"]`); ok(row); button(row, t('action.edit'));
+        await wait(() => modalDocument().querySelectorAll('[data-opencc-chain-step]').length === 2, 'Load chain editor');
+        const beforeReorder = endpoint.store.getStatus(chain.id).snapshotId;
+        const down = modalDocument().querySelector<HTMLElement>('[data-opencc-move-down]'); ok(down); down.click();
+        button(document, t('action.load'));
+        await wait(() => endpoint.store.getStatus(chain.id).snapshotId !== beforeReorder, 'Save reordered chain');
+        equal(await endpoint.engine.convertPlain(await endpoint.store.getActive(chain.id), '甲', new AbortController().signal), '乙');
+        await endpoint.store.remove(first.definition.id); await endpoint.store.remove(second.definition.id); endpoint.syncSchemeCommands();
+        const storedChain = endpoint.store.getDefinitions().find(item => item.id === chain.id)!;
+        const offline = new SchemeEditModal(endpoint, storedChain); offline.open();
+        await wait(() => modalDocument().querySelectorAll('[data-opencc-chain-step]').length === 2, 'Edit independent chain offline');
+        field(t('field.schemeName'), `${name} offline`); button(document, t('action.load'));
+        await wait(() => endpoint.store.getDefinitions().some(item => item.id === chain.id && item.name.endsWith('offline')), 'Rename independent chain offline');
+        equal(await endpoint.engine.convertPlain(await endpoint.store.getActive(chain.id), '甲', new AbortController().signal), '乙');
       });
     } },
     { name: 'settings/custom-save-and-first-default', run: async () => {
@@ -128,8 +189,8 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         const file = await plugin.app.vault.create(`__opencc_tests__/${autoName}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
         button(root, t('settings.addScheme')); field(t('field.source'), 'vault'); field(t('field.location'), file.path);
         button(document, t('action.load'));
-        await wait(() => endpoint.store.getDefinitions().some(item => item.source.location === file.path), 'One-step save with inferred name');
-        const definition = endpoint.store.getDefinitions().find(item => item.source.location === file.path)!;
+        await wait(() => endpoint.store.getDefinitions().some(item => locationOf(item) === file.path), 'One-step save with inferred name');
+        const definition = endpoint.store.getDefinitions().find(item => locationOf(item) === file.path)!;
         equal(definition.name, autoName);
         if (first) await wait(() => endpoint.store.getDefaultId() === definition.id, 'First scheme becomes default');
         else equal(endpoint.store.getDefaultId(), previousDefault);
@@ -168,7 +229,7 @@ export function settingsTests(plugin: TestPlugin, fixtureOrigin?: string) {
         field(t('field.schemeName'), 'Changed name'); field(t('field.location'), replacement.path);
         button(document, t('action.load'));
         await wait(() => endpoint.store.getDefinitions().some(item => item.id === definition.id && item.name === 'Changed name'), 'Save all edits');
-        equal(endpoint.store.getDefinitions().find(item => item.id === definition.id)?.source.location, replacement.path);
+        equal(locationOf(endpoint.store.getDefinitions().find(item => item.id === definition.id)!), replacement.path);
         ok(endpoint.store.getStatus(definition.id).snapshotId !== before, 'Changed source must load a new snapshot');
       });
     } },

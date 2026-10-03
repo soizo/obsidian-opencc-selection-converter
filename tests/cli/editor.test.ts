@@ -4,9 +4,9 @@ import { undo, redo, isolateHistory } from '@codemirror/commands';
 import type { ConversionOutcome } from '../../src/main';
 import { captureTarget, type CapturedTarget } from '../../src/selection/editor';
 import { DEFAULT_RULES } from '../../src/selection/types';
-import { prepareScheme, loadPrepared } from '../../src/schemes/resources';
+import { combineSnapshots, prepareScheme, loadPrepared, schemeSourceKey } from '../../src/schemes/resources';
 import type { SchemeStore } from '../../src/schemes/store';
-import { engine } from './engine.test';
+import { engine, snapshot } from './engine.test';
 import { equal, ok } from './assert';
 import { openFixture, type TestPlugin } from './fixtures';
 
@@ -29,6 +29,21 @@ export function editorTests(plugin: TestPlugin) {
     const snapshot = await loadPrepared(plugin.app, await prepareScheme(plugin.app, definition, signal), engine(plugin), signal);
     await endpoint.store.activate(definition, snapshot);
     return { text, view, id, signal, target: captureTarget(view) };
+  }
+  async function chainFixture(live = false) {
+    const context = await fixture(live);
+    const definitions = [
+      { id: crypto.randomUUID(), name: 'Chain first', source: { kind: 'vault' as const, location: 'synthetic-first.json' } },
+      { id: crypto.randomUUID(), name: 'Chain second', source: { kind: 'vault' as const, location: 'synthetic-second.json' } },
+    ];
+    const steps = await Promise.all([
+      snapshot({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟件' } } }] }),
+      snapshot({ conversion_chain: [{ dict: { type: 'inline', entries: { 軟件: '軟體' } } }] }),
+    ]);
+    for (const [index, prepared] of steps.entries()) { prepared.schemeId = definitions[index]!.id; prepared.sourceKey = await schemeSourceKey(definitions[index]!); }
+    const definition = { id: crypto.randomUUID(), name: 'Editor chain', source: { kind: 'chain' as const, steps: definitions } };
+    await endpoint.store.activate(definition, await combineSnapshots(definition, steps));
+    return { ...context, id: definition.id, target: captureTarget(context.view) };
   }
   async function paused(action: (context: Awaited<ReturnType<typeof fixture>>, resume: () => void, pending: Promise<ConversionOutcome>, controller: AbortController) => Promise<void>) {
     const context = await fixture();
@@ -55,6 +70,12 @@ export function editorTests(plugin: TestPlugin) {
     }
   }
   return [
+    ...[false, true].map(live => ({ name: `editor/chain-atomic-undo/${live ? 'live' : 'source'}`, run: async () => {
+      const { view, id, signal, target, text } = await chainFixture(live);
+      equal((await endpoint.convertSelection(target, id, signal)).code, 'CHANGED');
+      equal(view.editor.getValue(), '前軟**體**后');
+      ok(undo(target.cm)); equal(view.editor.getValue(), text);
+    } })),
     ...[false, true].map(live => ({ name: `editor/atomic-undo/${live ? 'live' : 'source'}`, run: async () => {
       const { view, id, signal, target } = await fixture(live);
       const cm = target.cm;

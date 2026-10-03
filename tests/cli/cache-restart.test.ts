@@ -13,20 +13,27 @@ export function cacheRestartTests(plugin: TestPlugin, prepare: boolean, origin?:
       const definition = { id: crypto.randomUUID(), name: 'Restart fixture', source: { kind: 'url' as const, location: `${origin}/config.json` }, approvedHttpUrls: [`${origin}/config.json`, `${origin}/dict.txt`] };
       const signal = new AbortController().signal;
       const snapshot = await loadPrepared(plugin.app, await prepareScheme(plugin.app, definition, signal), engine(plugin), signal);
+      const second = { ...definition, id: crypto.randomUUID(), name: 'Restart second' };
+      const chain = { id: crypto.randomUUID(), name: 'Restart chain', source: { kind: 'chain' as const, steps: [definition, second] } };
+      const chainSnapshot = await loadPrepared(plugin.app, await prepareScheme(plugin.app, chain, signal), engine(plugin), signal);
       const store = new SchemeStore(plugin.app, engine(plugin));
       await store.load();
       await store.activate(definition, snapshot);
-      await plugin.app.vault.adapter.write(path, JSON.stringify({ id: definition.id, snapshotId: snapshot.id }));
+      await store.activate(chain, chainSnapshot);
+      await plugin.app.vault.adapter.write(path, JSON.stringify({ id: definition.id, snapshotId: snapshot.id, chainId: chain.id, chainSnapshotId: chainSnapshot.id }));
     } else {
       const store = (plugin as TestPlugin & { store?: SchemeStore }).store;
       ok(store, 'Production plugin did not restore SchemeStore');
-      let saved: { id: string; snapshotId: string };
+      let saved: { id: string; snapshotId: string; chainId: string; chainSnapshotId: string };
       try { saved = JSON.parse(await plugin.app.vault.adapter.read(path)); }
       catch { throw new Error('Invalid restart ticket contents'); }
       const snapshot = await store.getActive(saved.id);
       equal(snapshot.id, saved.snapshotId);
       equal(await engine(plugin).convertPlain(snapshot, '软件', new AbortController().signal), '軟體');
-      await store.remove(saved.id);
+      const chainSnapshot = await store.getActive(saved.chainId);
+      equal(chainSnapshot.id, saved.chainSnapshotId);
+      equal(await engine(plugin).convertPlain(chainSnapshot, '软件', new AbortController().signal), '軟體');
+      await store.remove(saved.id); await store.remove(saved.chainId);
     }
   } }];
 }

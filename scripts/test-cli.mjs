@@ -23,7 +23,7 @@ async function exists(file) {
 
 async function cli(...args) {
   const { stdout, stderr } = await exec('obsidian', [`vault=${vaultName}`, ...args], {
-    cwd: root, timeout: 120000, maxBuffer: 1024 * 1024,
+    cwd: root, timeout: 240000, maxBuffer: 1024 * 1024,
   });
   if (stderr.trim()) process.stderr.write(stderr);
   return stdout.trim();
@@ -60,9 +60,12 @@ async function ensureInside(vault, directory) {
 }
 
 async function runProduction(pluginId) {
-  const name = `Production ${randomUUID()}`;
+  const name = `Production A ${randomUUID()}`;
+  const secondName = `Production B ${randomUUID()}`;
+  const chainName = `Production chain ${randomUUID()}`;
   const folder = '__opencc_production__';
   const configPath = `${folder}/config-${randomUUID()}.json`;
+  const secondConfigPath = `${folder}/config-${randomUUID()}.json`;
   const notePath = `${folder}/note-${randomUUID()}.md`;
   const result = await evaluate(`(async()=>{
     const wait=async(test,label)=>{const end=Date.now()+20000;while(!test()&&Date.now()<end)await new Promise(r=>setTimeout(r,50));if(!test())throw new Error(label)};
@@ -79,15 +82,26 @@ async function runProduction(pluginId) {
     const p=app.plugins.plugins[${JSON.stringify(pluginId)}];
     if(!p||p.runCliSuite!==undefined)throw new Error('Not a production plugin');
     let folder=app.vault.getAbstractFileByPath(${JSON.stringify(folder)});if(!folder)await app.vault.createFolder(${JSON.stringify(folder)});
-    const config=JSON.stringify({conversion_chain:[{dict:{type:'inline',entries:{'软件':'軟體'}}}]});
+    const config=JSON.stringify({conversion_chain:[{dict:{type:'inline',entries:{'软件':'軟件'}}}]});
+    const secondConfig=JSON.stringify({conversion_chain:[{dict:{type:'inline',entries:{'軟件':'軟體'}}}]});
     let configFile=app.vault.getAbstractFileByPath(${JSON.stringify(configPath)});configFile?await app.vault.modify(configFile,config):configFile=await app.vault.create(${JSON.stringify(configPath)},config);
+    let secondConfigFile=app.vault.getAbstractFileByPath(${JSON.stringify(secondConfigPath)});secondConfigFile?await app.vault.modify(secondConfigFile,secondConfig):secondConfigFile=await app.vault.create(${JSON.stringify(secondConfigPath)},secondConfig);
     let note=app.vault.getAbstractFileByPath(${JSON.stringify(notePath)});note?await app.vault.modify(note,'前软件后'):note=await app.vault.create(${JSON.stringify(notePath)},'前软件后');
     app.setting.open();await new Promise(r=>setTimeout(r,500));app.setting.openTabById(${JSON.stringify(pluginId)});
     await wait(()=>app.setting.activeTab?.id===${JSON.stringify(pluginId)},'settings tab');uiDoc=app.setting.tabContentContainer.ownerDocument;
     await wait(()=>[...uiDoc.querySelectorAll('button')].some(x=>matches('add',x.textContent)),'settings');
     button('add');field('source','vault');field('name',${JSON.stringify(name)});field('location',${JSON.stringify(configPath)});button('load');
-    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'activation');
-    const select=[...app.setting.tabContentContainer.querySelectorAll('select[aria-label]')].find(x=>matches('default',x.getAttribute('aria-label')));const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(name)}));if(!option)throw new Error('Missing default option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
+    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(name)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'first activation');
+    button('add');field('source','vault');field('name',${JSON.stringify(secondName)});field('location',${JSON.stringify(secondConfigPath)});button('load');
+    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(secondName)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'second activation');
+    button('add');field('source','chain');field('name',${JSON.stringify(chainName)});
+    const addStep=()=>{const el=uiDoc.querySelector('[data-opencc-add-step]');if(!el)throw new Error('Missing add step');el.click()};
+    addStep();await wait(()=>uiDoc.querySelectorAll('[data-opencc-chain-step]').length===1,'first chain step');
+    addStep();await wait(()=>uiDoc.querySelectorAll('[data-opencc-chain-step]').length===2,'second chain step');
+    const stepSelects=[...uiDoc.querySelectorAll('[data-opencc-chain-step]')];const secondOption=[...stepSelects[1].options].find(x=>x.textContent===${JSON.stringify(secondName)});if(!secondOption)throw new Error('Missing second chain option');stepSelects[1].value=secondOption.value;stepSelects[1].dispatchEvent(new Event('change',{bubbles:true}));
+    await wait(()=>[...uiDoc.querySelectorAll('[data-opencc-chain-step]')][1]?.dataset.openccResolved===secondOption.value,'resolve second chain step');button('load');
+    await wait(()=>uiDoc.body.textContent.includes(${JSON.stringify(chainName)})&&![...uiDoc.querySelectorAll('.modal-title')].some(x=>matches('title',x.textContent)),'chain activation');
+    const select=[...app.setting.tabContentContainer.querySelectorAll('select[aria-label]')].find(x=>matches('default',x.getAttribute('aria-label')));const option=[...select.options].find(x=>x.textContent?.startsWith(${JSON.stringify(chainName)}));if(!option)throw new Error('Missing default chain option');select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));
     await new Promise(r=>setTimeout(r,300));app.setting.close();
     const leaf=app.workspace.getLeaf(false);await leaf.openFile(note,{state:{mode:'source',source:true}});const view=leaf.view;await view.setState({...view.getState(),mode:'source',source:true},{history:false});
     await wait(()=>view.editor.getValue()==='前软件后','note open');view.editor.setSelection({line:0,ch:1},{line:0,ch:3});await app.commands.executeCommandById(${JSON.stringify(`${pluginId}:convert-default`)});await wait(()=>view.editor.getValue()==='前軟體后','conversion');view.editor.undo();await wait(()=>view.editor.getValue()==='前软件后','undo');

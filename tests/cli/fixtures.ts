@@ -16,6 +16,6 @@ export async function openFixture(app: App, text: string, name = 'smoke.md'): Pr
   await leaf.openFile(file, { state: { mode: 'source', source: true } });
   if (!(leaf.view instanceof MarkdownView)) throw new Error('Fixture did not open as Markdown');
   await leaf.view.setState({ ...leaf.view.getState(), mode: 'source', source: true }, { history: false });
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  await Promise.resolve();
   return leaf.view;
 }

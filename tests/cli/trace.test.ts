@@ -1,7 +1,7 @@
 import type { TestPlugin } from './fixtures';
 import type { Snapshot } from '../../src/schemes/model';
 import type { LengthReport, TraceResult } from '../../src/engine/types';
-import { engine, officialSnapshot, snapshot } from './engine.test';
+import { chainSnapshot, engine, officialSnapshot, snapshot } from './engine.test';
 import { equal, ok, rejectsCode } from './assert';
 import ocd from '../fixtures/opencc/formats.ocd';
 import ocd2 from '../fixtures/opencc/formats.ocd2';
@@ -30,6 +30,21 @@ async function differential(plugin: TestPlugin, prepared: Snapshot, input: strin
 
 export function traceTests(plugin: TestPlugin) {
   return [
+    { name: 'trace/chain-origins', run: async () => {
+      const prepared = await chainSnapshot([
+        { conversion_chain: [{ dict: inline({ 甲: '乙乙' }) }] },
+        { conversion_chain: [{ dict: inline({ 乙乙: '丙' }) }] },
+      ]);
+      const result = await differential(plugin, prepared, '甲𠀀');
+      equal(result.output, '丙𠀀');
+      equal(result.origins, [0, 1]);
+      equal(result.matches.map(match => [match.inputLength, match.outputLength]), [[1, 2], [2, 1]]);
+      equal(result.matches.map(match => match.stagePath), ['$.steps[0].conversion_chain[0]', '$.steps[1].conversion_chain[0]']);
+      const report = await tracer(plugin).checkLengths(prepared, new AbortController().signal);
+      equal(report.status, 'risk');
+      equal(report.snapshotId, prepared.id);
+      equal(report.risks.map(risk => risk.stagePath), ['$.steps[0].conversion_chain[0]', '$.steps[1].conversion_chain[0]']);
+    } },
     { name: 'trace/cancelled-lengths', run: async () => {
       const prepared = await snapshot({ conversion_chain: [{ dict: inline({ 甲: '甲乙', 丙丁: '丙' }) }] });
       const result = await differential(plugin, prepared, '甲丙丁');

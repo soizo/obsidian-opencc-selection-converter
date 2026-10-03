@@ -1,6 +1,7 @@
 import type { TestPlugin } from './fixtures';
 import { equal, ok, rejectsCode } from './assert';
-import type { Snapshot } from '../../src/schemes/model';
+import type { ChainSchemeDefinition, ChainSnapshot, SingleSchemeDefinition, SingleSnapshot } from '../../src/schemes/model';
+import { combineSnapshots, schemeSourceKey } from '../../src/schemes/resources';
 import type { EngineClient } from '../../src/engine/client';
 import { ENGINE_ID } from '../../src/engine/types';
 import ocd from '../fixtures/opencc/formats.ocd';
@@ -14,7 +15,7 @@ import twPhrases from '../fixtures/opencc/s2twp/TWPhrases.ocd2';
 import twVariants from '../fixtures/opencc/s2twp/TWVariants.ocd2';
 import twVariantPhrases from '../fixtures/opencc/s2twp/TWVariantsPhrases.ocd2';
 
-export async function snapshot(config: unknown, files: Record<string, string> = {}): Promise<Snapshot> {
+export async function snapshot(config: unknown, files: Record<string, string> = {}): Promise<SingleSnapshot> {
   const text = JSON.stringify(config);
   const resources = await Promise.all(Object.entries(files).map(async ([file, content]) => {
     const bytes = new TextEncoder().encode(content);
@@ -32,7 +33,19 @@ export async function snapshot(config: unknown, files: Record<string, string> = 
   };
 }
 
-export async function officialSnapshot(): Promise<Snapshot> {
+export async function chainSnapshot(configs: readonly unknown[], files: readonly Record<string, string>[] = configs.map(() => ({}))): Promise<ChainSnapshot> {
+  const definitions: SingleSchemeDefinition[] = configs.map((_, index) => ({ id: `chain-step-${index}`, name: `Step ${index + 1}`, source: { kind: 'vault', location: `step-${index}.json` } }));
+  const steps = await Promise.all(configs.map(async (config, index) => {
+    const prepared = await snapshot(config, files[index]);
+    prepared.schemeId = definitions[index]!.id;
+    prepared.sourceKey = await schemeSourceKey(definitions[index]!);
+    return prepared;
+  }));
+  const definition: ChainSchemeDefinition = { id: 'engine-chain-fixture', name: 'Chain fixture', source: { kind: 'chain', steps: definitions } };
+  return combineSnapshots(definition, steps);
+}
+
+export async function officialSnapshot(): Promise<SingleSnapshot> {
   const prepared = await snapshot(s2twp);
   for (const [file, bytes] of [
     ['CJK_Compatibility_Ideographs.ocd2', compatibility],
@@ -66,6 +79,47 @@ const chain = {
 
 export function engineTests(plugin: TestPlugin) {
   return [
+    { name: 'engine/chain-resegment', run: async () => {
+      const firstConfig = {
+        segmentation: { type: 'mmseg', dict: { type: 'inline', entries: { 甲: '甲', 乙: '乙' } } },
+        conversion_chain: [{ dict: { type: 'inline', entries: { 甲: '丙', 乙: '丁' } } }],
+      };
+      const secondConfig = {
+        normalization: [{ dict: { type: 'inline', entries: { 丙丁: '戊己' } } }],
+        conversion_chain: [{ dict: { type: 'inline', entries: { 戊己: '庚辛' } } }],
+      };
+      const signal = new AbortController().signal;
+      const first = await snapshot(firstConfig);
+      const second = await snapshot(secondConfig);
+      const intermediate = await engine(plugin).convertPlain(first, '甲乙', signal);
+      equal(intermediate, '丙丁');
+      equal(await engine(plugin).convertPlain(second, intermediate, signal), '庚辛');
+      equal(await engine(plugin).convertPlain(await chainSnapshot([firstConfig, secondConfig]), '甲乙', signal), '庚辛');
+    } },
+    { name: 'engine/chain-resources-limits-and-recovery', run: async () => {
+      const textConfig = { conversion_chain: [{ dict: { type: 'text', file: 'same.txt' } }] };
+      const prepared = await chainSnapshot([textConfig, textConfig], [{ 'same.txt': '甲\t乙\n' }, { 'same.txt': '乙\t丙\n' }]);
+      const client = engine(plugin);
+      const signal = new AbortController().signal;
+      equal(await client.convertPlain(prepared, '甲𠀀', signal), '丙𠀀');
+      equal(await client.convertPlain(prepared, '', signal), '');
+      const invalid = structuredClone(prepared);
+      invalid.resources.find(resource => resource.virtualPath === 'step/1/same.txt')!.bytes = new Uint8Array([0xff]);
+      await rejectsCode(client.convertPlain(invalid, '甲', signal), 'INVALID_DICT_ENCODING');
+      equal(await client.convertPlain(await snapshot({ conversion_chain: [{ dict: { type: 'inline', entries: { 甲: '乙' } } }] }), '甲', signal), '乙');
+      const oversizedConfigs = await chainSnapshot([
+        { name: 'a'.repeat(1_100_000), conversion_chain: [] },
+        { name: 'b'.repeat(1_100_000), conversion_chain: [] },
+      ]);
+      await rejectsCode(client.validate(oversizedConfigs, signal), 'CONFIG_LIMIT');
+      const expansive = await chainSnapshot([
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 甲: 'x'.repeat(8192) } } }] },
+        { conversion_chain: [] },
+      ]);
+      await rejectsCode(client.convertPlain(expansive, '甲'.repeat(1025), signal), 'OUTPUT_LIMIT');
+      const cancelled = new AbortController(); cancelled.abort();
+      await rejectsCode(client.convertPlain(prepared, '甲', cancelled.signal), 'CANCELLED');
+    } },
     { name: 'engine/offline-formats', run: async () => {
       const client = engine(plugin);
       const signal = new AbortController().signal;

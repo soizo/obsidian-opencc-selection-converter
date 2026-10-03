@@ -3,12 +3,13 @@ import { projectMarkdown } from '../../src/selection/markdown';
 import { convertProjection } from '../../src/selection/convert';
 import { validatePatch } from '../../src/selection/serialize';
 import { DEFAULT_RULES, type Span } from '../../src/selection/types';
-import { engine, snapshot } from './engine.test';
+import { chainSnapshot, engine, snapshot } from './engine.test';
+import type { Snapshot } from '../../src/schemes/model';
 import { equal, rejectsCode } from './assert';
 import { openFixture, type TestPlugin } from './fixtures';
 
 export function mappingTests(plugin: TestPlugin) {
-  async function convert(text: string, stages: Record<string, string>[], force = false, selection: Span = { from: 0, to: text.length }, live = false) {
+  async function convertPrepared(text: string, prepared: Snapshot, force = false, selection: Span = { from: 0, to: text.length }, live = false) {
     const view = await openFixture(plugin.app, text);
     await view.setState({ ...view.getState(), mode: 'source', source: !live }, { history: false });
     for (let attempt = 0; view.editor.getValue() !== text && attempt < 60; attempt++) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -17,7 +18,6 @@ export function mappingTests(plugin: TestPlugin) {
     const state = captureTarget(view).cm.state;
     const rules = { ...structuredClone(DEFAULT_RULES), force };
     const projection = projectMarkdown(state, selection, rules);
-    const prepared = await snapshot({ conversion_chain: stages.map(entries => ({ dict: { type: 'inline', entries } })) });
     try {
       const patch = await convertProjection(projection, prepared, rules, engine(plugin), new AbortController().signal);
       validatePatch(state, projection, patch);
@@ -27,7 +27,30 @@ export function mappingTests(plugin: TestPlugin) {
       throw error;
     } finally { equal(view.editor.getValue(), text); } // Success and failure must both leave the real editor unchanged.
   }
+  async function convert(text: string, stages: Record<string, string>[], force = false, selection: Span = { from: 0, to: text.length }, live = false) {
+    return convertPrepared(text, await snapshot({ conversion_chain: stages.map(entries => ({ dict: { type: 'inline', entries } })) }), force, selection, live);
+  }
   return [
+    { name: 'mapping/chain-atomic-safety', run: async () => {
+      const expanding = await chainSnapshot([
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 甲乙: '丙' } } }] },
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 丙: '丁戊己' } } }] },
+      ]);
+      await rejectsCode(convertPrepared('甲**乙**', expanding), 'LENGTH_CHANGED');
+      equal((await convertPrepared('甲**乙**', expanding, true)).source, '丁戊己');
+      const roundtrip = await chainSnapshot([
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 甲乙: '丙' } } }] },
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 丙: '甲乙' } } }] },
+      ]);
+      const unchanged = await convertPrepared('甲**乙**', roundtrip, true);
+      equal(unchanged.source, '甲**乙**'); equal(unchanged.patch.changes, []);
+      const protectedLink = await chainSnapshot([
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟件' } } }] },
+        { conversion_chain: [{ dict: { type: 'inline', entries: { 軟件: '軟體' } } }] },
+      ]);
+      const linked = '外软[件](https://example.com/软件)外';
+      equal((await convertPrepared(linked, protectedLink, false, { from: 1, to: linked.length - 1 })).source, '外軟[體](https://example.com/软件)外');
+    } },
     { name: 'mapping/phrase', run: async () => {
       equal((await convert('软**件**', [{ 软件: '軟體' }])).source, '軟**體**');
       equal((await convert('软[件](https://example.com/软件)', [{ 软件: '軟體' }])).source, '軟[體](https://example.com/软件)');

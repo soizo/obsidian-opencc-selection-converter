@@ -3,7 +3,7 @@ import { smokeTests } from './smoke.test';
 import { engineTests } from './engine.test';
 import { traceTests } from './trace.test';
 import { configTests } from './config.test';
-import { resourcesTests } from './resources.test';
+import { liveResourcesTests, resourcesTests } from './resources.test';
 import { cacheTests } from './cache.test';
 import { cacheRestartTests } from './cache-restart.test';
 import { markdownTests } from './markdown.test';
@@ -18,7 +18,12 @@ export function attachCliTests(plugin: TestPlugin): void {
     if (!/^[a-f0-9-]{36}$/.test(runId)) throw new Error('Invalid test run ID');
     const settings = settingsTests(plugin, context.fixtureOrigin);
     const suites = { smoke: smokeTests(plugin), engine: engineTests(plugin), trace: traceTests(plugin), config: configTests(plugin), resources: resourcesTests(plugin, context.fixtureOrigin), cache: cacheTests(plugin), markdown: markdownTests(plugin), latex: latexTests(plugin), mapping: mappingTests(plugin), editor: editorTests(plugin), settings };
-    const tests = ['cache-restart-prepare', 'cache-restart'].includes(suite) ? cacheRestartTests(plugin, suite === 'cache-restart-prepare', context.fixtureOrigin, context.restartTicket) : suite === 'settings-menu' ? settings.filter(test => test.name === 'settings/context-menu-route') : suite === 'all' ? Object.values(suites).flat() : suites[suite as keyof typeof suites] ?? [];
+    const tests = ['cache-restart-prepare', 'cache-restart'].includes(suite) ? cacheRestartTests(plugin, suite === 'cache-restart-prepare', context.fixtureOrigin, context.restartTicket)
+      : suite === 'resources-live' ? liveResourcesTests(plugin)
+      : suite === 'settings-menu' ? settings.filter(test => test.name === 'settings/context-menu-route')
+      : suite === 'settings-presets' ? settings.filter(test => test.name === 'settings/official-presets')
+      : suite === 'settings-chain' ? settings.filter(test => test.name === 'settings/chain-editor')
+      : suite === 'all' ? Object.values(suites).flat() : suites[suite as keyof typeof suites] ?? [];
     const checks: {name: string; pass: boolean; error?: string}[] = [];
     if (!tests.length) checks.push({ name: suite, pass: false, error: 'Unknown or empty suite' });
     for (const test of tests) {

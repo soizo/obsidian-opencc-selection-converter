@@ -2,8 +2,8 @@ import type { TestPlugin } from './fixtures';
 import { engine } from './engine.test';
 import { equal, ok, rejectsCode } from './assert';
 import { SchemeStore } from '../../src/schemes/store';
-import { loadPrepared, prepareScheme } from '../../src/schemes/resources';
-import type { SchemeDefinition } from '../../src/schemes/model';
+import { isChainDefinition, loadPrepared, prepareScheme } from '../../src/schemes/resources';
+import type { ChainSchemeDefinition, SchemeDefinition, SingleSchemeDefinition } from '../../src/schemes/model';
 import { DEFAULT_RULES } from '../../src/selection/types';
 
 export function cacheTests(plugin: TestPlugin) {
@@ -21,6 +21,26 @@ export function cacheTests(plugin: TestPlugin) {
     return { definition, snapshot, store, file };
   }
   return [
+    { name: 'cache/chain-independent', run: async () => {
+      if (!app.vault.getAbstractFileByPath('__opencc_tests__')) await app.vault.createFolder('__opencc_tests__');
+      const firstFile = await app.vault.create(`__opencc_tests__/chain-first-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 甲: '乙' } } }] }));
+      const secondFile = await app.vault.create(`__opencc_tests__/chain-second-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 乙: '丙' } } }] }));
+      const legacyFile = await app.vault.create(`__opencc_tests__/chain-legacy-${crypto.randomUUID()}.json`, JSON.stringify({ conversion_chain: [{ dict: { type: 'inline', entries: { 软件: '軟體' } } }] }));
+      const first: SingleSchemeDefinition = { id: crypto.randomUUID(), name: 'First', source: { kind: 'vault', location: firstFile.path } };
+      const second: SingleSchemeDefinition = { id: crypto.randomUUID(), name: 'Second', source: { kind: 'vault', location: secondFile.path } };
+      const legacy: SingleSchemeDefinition = { id: crypto.randomUUID(), name: 'Legacy', source: { kind: 'vault', location: legacyFile.path } };
+      const chain: ChainSchemeDefinition = { id: crypto.randomUUID(), name: 'Independent chain', source: { kind: 'chain', steps: [first, second] } };
+      const store = new SchemeStore(app, engine(plugin));
+      await store.load();
+      await store.activate(chain, await loadPrepared(app, await prepareScheme(app, chain, signal), engine(plugin), signal));
+      await store.activate(legacy, await loadPrepared(app, await prepareScheme(app, legacy, signal), engine(plugin), signal));
+      await Promise.all([firstFile, secondFile].map(file => app.vault.delete(file)));
+      const recovered = new SchemeStore(app, engine(plugin));
+      await recovered.load();
+      equal(await engine(plugin).convertPlain(await recovered.getActive(chain.id), '甲', signal), '丙');
+      equal(await engine(plugin).convertPlain(await recovered.getActive(legacy.id), '软件', signal), '軟體');
+      await recovered.remove(chain.id); await recovered.remove(legacy.id);
+    } },
     { name: 'cache/refresh-fallback', run: async () => {
       const { definition, snapshot, file } = await fixture();
       await app.vault.modify(file, '{invalid');
@@ -156,7 +176,8 @@ export function cacheTests(plugin: TestPlugin) {
       const { definition, snapshot, store } = await fixture();
       const changed = { ...definition, source: { kind: 'vault' as const, location: `${definition.source.location}.missing` } };
       await rejectsCode(store.activate(changed, snapshot), 'SNAPSHOT_IDENTITY');
-      equal(store.getDefinitions().find(item => item.id === definition.id)?.source.location, definition.source.location);
+      const stored = store.getDefinitions().find(item => item.id === definition.id); ok(stored && !isChainDefinition(stored));
+      equal(stored.source.location, definition.source.location);
       equal((await store.getActive(definition.id)).sourceKey, snapshot.sourceKey);
     } },
   ];
