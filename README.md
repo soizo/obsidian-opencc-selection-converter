@@ -6,8 +6,7 @@ The plugin supports desktop and mobile code paths, vault files and URL-based sch
 
 ## Installation
 
-https://community.obsidian.md/plugins/opencc-selection-converter
-Build the plugin, then copy the release files to the vault’s plugin directory:
+[community](https://community.obsidian.md/plugins/opencc-selection-converter) or build the plugin, copy the release files to the vault’s plugin directory:
 
 ```text
 npm ci
