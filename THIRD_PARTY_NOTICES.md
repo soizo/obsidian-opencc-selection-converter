@@ -16,7 +16,7 @@ The project adds a C ABI bridge and tracing/enumeration code in `engine/bridge.c
 
 Copyright TerryTian-tech and contributors; contributor notices are retained in the dictionaries.
 
-Source: <https://github.com/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards>, fixed commit `67f2c7293e9ce226fcc1ee15cdb60b9b9dfd5c60`.
+Source: <https://github.com/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards>, fixed commit `5ae726ea846840283172c6aaa38a1b255b1d601d`.
 
 License: Apache License 2.0; complete text in `engine/licenses/t2gov.txt`, copied from the pinned source. The `t2gov` preset loads the pinned configuration and dictionaries; `s2gov` runs the existing OpenCC `s2t` preset followed by this `t2gov` preset.
 

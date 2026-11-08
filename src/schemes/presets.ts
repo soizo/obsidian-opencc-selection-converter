@@ -3,7 +3,7 @@ import type { SchemeDefinition, SingleSchemeDefinition } from './model';
 
 const OPENCC_CONFIG = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/data/config';
 const OPENCC_DICTIONARIES = 'https://cdn.jsdelivr.net/npm/opencc@1.4.2/prebuilds/assets/';
-const GOV_ROOT = 'https://cdn.jsdelivr.net/gh/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards@67f2c7293e9ce226fcc1ee15cdb60b9b9dfd5c60/t2gov';
+const GOV_ROOT = 'https://cdn.jsdelivr.net/gh/TerryTian-tech/OpenCC-Traditional-Chinese-characters-according-to-Chinese-government-standards@5ae726ea846840283172c6aaa38a1b255b1d601d/t2gov';
 
 export const PRESETS = [
   ['s2t', 'official.s2t', 'opencc'], ['t2s', 'official.t2s', 'opencc'], ['s2tw', 'official.s2tw', 'opencc'], ['tw2s', 'official.tw2s', 'opencc'],
